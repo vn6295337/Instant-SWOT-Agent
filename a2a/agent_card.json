@@ -1,0 +1,72 @@
+{
+  "name": "swot-researcher",
+  "version": "1.0.0",
+  "description": "Financial research agent that collects data from 6 MCP servers (Financials, Volatility, Macro, Valuation, News, Sentiment) for SWOT analysis.",
+  "url": "http://localhost:8003",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "authentication": {
+    "schemes": []
+  },
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["data"],
+  "skills": [
+    {
+      "id": "research-company",
+      "name": "Company Research",
+      "description": "Fetch comprehensive financial data for a company from multiple sources including SEC EDGAR, Yahoo Finance, FRED, Tavily, and Finnhub.",
+      "inputModes": ["text"],
+      "outputModes": ["data"],
+      "examples": [
+        {
+          "input": "Research Tesla",
+          "output": "Aggregated financial data for TSLA including financials, volatility, macro indicators, valuation, news, and sentiment"
+        },
+        {
+          "input": "Research AAPL Apple Inc",
+          "output": "Aggregated financial data for Apple Inc"
+        }
+      ],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "company": {
+            "type": "string",
+            "description": "Company name or ticker symbol"
+          }
+        },
+        "required": ["company"]
+      }
+    }
+  ],
+  "dataSources": [
+    {
+      "name": "SEC EDGAR",
+      "description": "SEC filings, fundamentals, material events",
+      "mcp": "financials-basket"
+    },
+    {
+      "name": "Yahoo Finance",
+      "description": "Stock prices, volatility, valuation ratios",
+      "mcp": ["volatility-basket", "valuation-basket"]
+    },
+    {
+      "name": "FRED",
+      "description": "Federal Reserve economic data, macro indicators",
+      "mcp": ["volatility-basket", "macro-basket"]
+    },
+    {
+      "name": "Tavily",
+      "description": "Web search for company news",
+      "mcp": "news-basket"
+    },
+    {
+      "name": "Finnhub",
+      "description": "News sentiment analysis",
+      "mcp": "sentiment-basket"
+    }
+  ]
+}

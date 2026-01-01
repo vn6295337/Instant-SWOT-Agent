@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-strategy-copilot"
+version = "1.0.0"
+description = "AI-Powered Strategic Analysis with Self-Correcting Quality Control"
+readme = "README.md"
+authors = [{name = "VN", email = "vn6295337@example.com"}]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Business/Commerce",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Office/Business",
+]
+dependencies = [
+    "streamlit>=1.31.0",
+    "langchain>=0.1.0",
+    "langchain-community>=0.1.0",
+    "langchain-core>=0.1.0",
+    "langsmith>=0.1.0",
+    "tavily-python>=0.1.0",
+    "python-dotenv>=1.0.0",
+]
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=22.0.0",
+    "flake8>=5.0.0",
+    "pylint>=2.15.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/vn6295337/AI-Strategy-Copilot"
+Repository = "https://github.com/vn6295337/AI-Strategy-Copilot"
+Documentation = "https://github.com/vn6295337/AI-Strategy-Copilot/tree/main/docs"
+
+[project.scripts]
+ai-strategy-copilot = "app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["src"]

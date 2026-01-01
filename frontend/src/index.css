@@ -1,0 +1,668 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Dark mode only - no light theme */
+  :root {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 221 83% 53%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 210 40% 98%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 11%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 221 83% 53%;
+
+    --radius: 0.5rem;
+
+    /* SWOT quadrant colors */
+    --strength: 142 76% 36%;
+    --weakness: 0 84% 60%;
+    --opportunity: 221 83% 53%;
+    --threat: 38 92% 50%;
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* ProcessFlow SVG Colors - Dark theme with black containers */
+    /* Container styling: black bg, light gray border, gray icons/text */
+    --pf-idle-fill: #000000;
+    --pf-idle-stroke: #6B7280;
+    --pf-executing-fill: #000000;
+    --pf-executing-stroke: #F59E0B;
+    --pf-completed-fill: #000000;
+    --pf-completed-stroke: #10B981;
+    --pf-failed-fill: #000000;
+    --pf-failed-stroke: #EF4444;
+    --pf-partial-fill: #000000;
+    --pf-partial-stroke: #F59E0B;
+
+    /* Cache states */
+    --pf-cache-hit-fill: #000000;
+    --pf-cache-hit-stroke: #10B981;
+    --pf-cache-miss-fill: #000000;
+    --pf-cache-miss-stroke: #EF4444;
+
+    /* LLM providers */
+    --pf-llm-idle-fill: #000000;
+    --pf-llm-idle-stroke: #6B7280;
+    --pf-llm-active-fill: #000000;
+    --pf-llm-active-stroke: #3B82F6;
+    --pf-llm-completed-fill: #000000;
+    --pf-llm-completed-stroke: #2563EB;
+    --pf-llm-failed-fill: #000000;
+    --pf-llm-failed-stroke: #EF4444;
+
+    /* Connector colors */
+    --pf-connector-idle: #4B5563;
+    --pf-connector-executing: #F59E0B;
+    --pf-connector-completed: #10B981;
+    --pf-connector-failed: #EF4444;
+
+    /* Group box - unchanged */
+    --pf-group-fill: rgba(31, 41, 55, 0.3);
+    --pf-group-stroke: #4B5563;
+
+    /* Text and icon colors - gray */
+    --pf-icon-color: #9CA3AF;
+    --pf-text-label: #9CA3AF;
+    --pf-text-idle: #9CA3AF;
+    --pf-text-active: #9CA3AF;
+    --pf-text-mcp: #9CA3AF;
+    --pf-llm-text-idle: #9CA3AF;
+    --pf-llm-text-active: #9CA3AF;
+    --pf-llm-text-completed: #9CA3AF;
+    --pf-llm-text-failed: #F87171;
+    --pf-group-label: #9CA3AF;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  code, pre {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer utilities {
+  /* Fade animations */
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out forwards;
+  }
+
+  .animate-slide-in-left {
+    animation: slideInLeft 0.4s ease-out forwards;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.4s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out forwards;
+  }
+
+  .animate-pulse-soft {
+    animation: pulseSoft 2s ease-in-out infinite;
+  }
+
+  /* Button state colors */
+  .btn-amber {
+    @apply bg-amber-500 hover:bg-amber-600 text-white;
+  }
+
+  .btn-amber-outline {
+    @apply border border-amber-500 text-amber-500 hover:bg-amber-500/10 bg-transparent;
+  }
+
+  .btn-amber-pulse {
+    animation: buttonPulse 1.5s ease-in-out infinite;
+  }
+
+  .btn-green {
+    @apply bg-green-600 hover:bg-green-700 text-white;
+  }
+
+  @keyframes buttonPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+    50% { box-shadow: 0 0 15px 5px rgba(245, 158, 11, 0.4); }
+  }
+
+  /* Staggered animations for cards */
+  .stagger-1 { animation-delay: 0.1s; }
+  .stagger-2 { animation-delay: 0.2s; }
+  .stagger-3 { animation-delay: 0.3s; }
+  .stagger-4 { animation-delay: 0.4s; }
+
+  /* Card hover effects */
+  .card-hover {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .card-hover:hover {
+    @apply shadow-lg -translate-y-1;
+  }
+
+  /* Button hover glow */
+  .btn-glow {
+    @apply transition-all duration-300;
+  }
+
+  .btn-glow:hover:not(:disabled) {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.4);
+  }
+
+  /* Progress bar animation */
+  .progress-animated .progress-bar {
+    transition: width 0.5s ease-out;
+  }
+
+  /* SWOT card borders with gradient */
+  .swot-strength {
+    @apply border-l-4;
+    border-left-color: hsl(var(--strength));
+  }
+
+  .swot-weakness {
+    @apply border-l-4;
+    border-left-color: hsl(var(--weakness));
+  }
+
+  .swot-opportunity {
+    @apply border-l-4;
+    border-left-color: hsl(var(--opportunity));
+  }
+
+  .swot-threat {
+    @apply border-l-4;
+    border-left-color: hsl(var(--threat));
+  }
+
+  /* Glassmorphism effect */
+  .glass {
+    @apply bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg;
+  }
+
+  /* Text gradient */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes pulseSoft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+}
+
+/* === ProcessFlow SVG Styles === */
+
+/* Node base styles */
+.pf-node {
+  transition: fill 0.3s ease, stroke 0.3s ease, opacity 0.3s ease;
+}
+
+.pf-node:hover {
+  filter: brightness(1.15);
+  cursor: pointer;
+}
+
+/* Node states */
+.pf-node-idle {
+  fill: var(--pf-idle-fill);
+  stroke: var(--pf-idle-stroke);
+}
+
+.pf-node-executing {
+  fill: var(--pf-executing-fill);
+  stroke: var(--pf-executing-stroke);
+}
+
+.pf-node-completed {
+  fill: var(--pf-completed-fill);
+  stroke: var(--pf-completed-stroke);
+}
+
+.pf-node-failed {
+  fill: var(--pf-failed-fill);
+  stroke: var(--pf-failed-stroke);
+}
+
+.pf-node-partial {
+  fill: var(--pf-partial-fill);
+  stroke: var(--pf-partial-stroke);
+}
+
+.pf-node-skipped {
+  fill: var(--pf-idle-fill);
+  stroke: var(--pf-idle-stroke);
+  stroke-dasharray: 3 2;
+  stroke-width: 1.5;
+  opacity: 0.6;
+}
+
+/* Agents - thin border same as MCP servers */
+.pf-agent {
+  stroke-width: 1;
+}
+
+/* No border for non-agent nodes */
+.pf-no-border {
+  stroke: none !important;
+  stroke-width: 0 !important;
+}
+
+/* Agent executing state with drop-shadow for sophistication */
+.pf-agent.pf-node-executing {
+  filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.7));
+}
+
+/* Cache states */
+.pf-cache-idle {
+  fill: var(--pf-idle-fill);
+  stroke: var(--pf-idle-stroke);
+}
+
+.pf-cache-checking {
+  fill: var(--pf-executing-fill);
+  stroke: var(--pf-executing-stroke);
+}
+
+.pf-cache-hit {
+  fill: var(--pf-cache-hit-fill);
+  stroke: var(--pf-cache-hit-stroke);
+}
+
+.pf-cache-miss {
+  fill: var(--pf-cache-miss-fill);
+  stroke: var(--pf-cache-miss-stroke);
+}
+
+/* Connector styles */
+.pf-connector {
+  transition: stroke 0.3s ease;
+}
+
+.pf-connector-idle {
+  stroke: var(--pf-connector-idle);
+}
+
+.pf-connector-executing {
+  stroke: var(--pf-connector-executing);
+  animation: pfPulse 1.5s ease-in-out infinite;
+}
+
+.pf-connector-completed {
+  stroke: var(--pf-connector-completed);
+}
+
+.pf-connector-failed {
+  stroke: var(--pf-connector-failed);
+}
+
+/* Orchestration connector - coordinated reasoning signal */
+.pf-orchestration {
+  stroke-dasharray: 6 3;
+  stroke-width: 2;
+}
+
+/* Success halo - completion confidence signal */
+.pf-success-halo {
+  stroke: rgba(34, 197, 94, 0.6);
+  stroke-width: 2;
+  fill: none;
+  animation: successGlow 2s ease-in-out infinite;
+}
+
+@keyframes successGlow {
+  0%, 100% { stroke-opacity: 0.6; }
+  50% { stroke-opacity: 1; }
+}
+
+/* MCP aggregate - capability layer styling */
+.pf-mcp-aggregate {
+  stroke-width: 1.5;
+  stroke-dasharray: 2 2;
+}
+
+/* MCP individual nodes - lighter treatment as data feeders */
+.pf-node-mcp {
+  stroke-width: 1.2;
+  opacity: 0.75;
+}
+
+/* Group labels */
+.pf-group-label {
+  fill: var(--pf-group-label);
+}
+
+/* Icon styling - gray */
+.pf-icon {
+  color: var(--pf-icon-color);
+}
+
+/* Text label styling - gray */
+.pf-text-label {
+  fill: var(--pf-text-label);
+}
+
+/* Agent text styling - white, larger */
+.pf-text-agent {
+  fill: #FFFFFF;
+}
+
+/* LLM Provider styles */
+.pf-llm {
+  transition: fill 0.3s ease, stroke 0.3s ease, opacity 0.3s ease;
+}
+
+.pf-llm:hover {
+  filter: brightness(1.1);
+}
+
+.pf-llm-idle {
+  fill: var(--pf-llm-idle-fill);
+  stroke: var(--pf-idle-stroke);
+}
+
+.pf-llm-executing {
+  fill: var(--pf-llm-active-fill);
+  stroke: var(--pf-executing-stroke);
+}
+
+.pf-llm-completed {
+  fill: var(--pf-llm-completed-fill);
+  stroke: var(--pf-completed-stroke);
+}
+
+.pf-llm-failed {
+  fill: var(--pf-llm-failed-fill);
+  stroke: var(--pf-llm-failed-stroke);
+}
+
+/* Group box styles */
+.pf-group {
+  fill: var(--pf-group-fill);
+  stroke: var(--pf-group-stroke);
+  transition: fill 0.3s ease;
+}
+
+/* Text styles */
+.pf-text-idle {
+  fill: var(--pf-text-idle);
+}
+
+.pf-text-active {
+  fill: var(--pf-text-active);
+}
+
+.pf-text-mcp {
+  fill: var(--pf-text-mcp);
+}
+
+.pf-llm-text-idle {
+  fill: var(--pf-llm-text-idle);
+}
+
+.pf-llm-text-executing {
+  fill: var(--pf-llm-text-active);
+}
+
+.pf-llm-text-completed {
+  fill: var(--pf-llm-text-completed);
+}
+
+.pf-llm-text-failed {
+  fill: var(--pf-llm-text-failed);
+}
+
+/* F.10 - Only pulse animation for executing nodes, no glow */
+.pf-pulse {
+  animation: pfPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pfPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Animation discipline: completed states = static confidence */
+.pf-node-completed {
+  animation: none !important;
+}
+
+.pf-llm-completed {
+  animation: none !important;
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-muted rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}
+
+/* Mobile touch-friendly styles */
+@media (max-width: 640px) {
+  /* Larger touch targets on mobile */
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  /* Prevent text size adjustment on orientation change */
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Better tap highlight */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Improve scrolling performance */
+  .overflow-y-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: max(0px)) {
+  .container {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  footer {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Improve focus states for accessibility */
+@layer utilities {
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background;
+  }
+}
+
+/* Print styles for PDF export */
+@media print {
+  /* Reset colors for print */
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --muted-foreground: 0 0% 30%;
+  }
+
+  /* Hide non-essential elements */
+  header,
+  footer,
+  aside,
+  .print\\:hidden,
+  button:not(.print\\:block),
+  [role="tablist"] {
+    display: none !important;
+  }
+
+  /* Full width main content */
+  main {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .container {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  /* Show all tab content for print */
+  [role="tabpanel"] {
+    display: block !important;
+    opacity: 1 !important;
+  }
+
+  /* Clean card styles */
+  .card {
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Ensure text is black */
+  body {
+    color: black !important;
+    background: white !important;
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+
+  /* Page margins */
+  @page {
+    margin: 1cm;
+    size: A4;
+  }
+
+  /* Prevent orphans and widows */
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* Add section labels for print */
+  .text-strength::before { content: ""; }
+  .text-weakness::before { content: ""; }
+  .text-opportunity::before { content: ""; }
+  .text-threat::before { content: ""; }
+}
