@@ -72,12 +72,15 @@ def _extract_key_metrics(raw_data: str) -> dict:
     fin = metrics.get("financials", {})
     if fin and "error" not in fin:
         fin_data = fin.get("financials", {})
+        debt_data = fin.get("debt", {})
         extracted["financials"] = {
             "revenue": _extract_temporal_metric(fin_data.get("revenue", {})),
-            "revenue_cagr_3yr": fin_data.get("revenue_cagr_3yr"),
-            "net_margin": fin_data.get("net_margin"),
+            "revenue_cagr_3yr": fin_data.get("revenue_growth_3yr"),
+            "net_margin": _extract_temporal_metric(fin_data.get("net_margin_pct", {})),
+            "gross_margin": _extract_temporal_metric(fin_data.get("gross_margin_pct", {})),
+            "operating_margin": _extract_temporal_metric(fin_data.get("operating_margin_pct", {})),
             "eps": _extract_temporal_metric(fin_data.get("eps", {})),
-            "debt_to_equity": fin.get("debt", {}).get("debt_to_equity"),
+            "debt_to_equity": _extract_temporal_metric(debt_data.get("debt_to_equity", {})),
             "free_cash_flow": _extract_temporal_metric(fin.get("cash_flow", {}).get("free_cash_flow", {})),
             "net_income": _extract_temporal_metric(fin_data.get("net_income", {})),
         }
@@ -158,8 +161,15 @@ def _format_metrics_for_prompt(extracted: dict) -> str:
 
         if fin.get("revenue_cagr_3yr"):
             lines.append(f"- Revenue CAGR (3yr): {fin['revenue_cagr_3yr']:.1f}%")
-        if fin.get("net_margin"):
-            lines.append(f"- Net Margin: {fin['net_margin']:.1f}%")
+
+        # Net margin with fiscal period
+        net_margin = fin.get("net_margin", {})
+        if isinstance(net_margin, dict) and net_margin.get("value") is not None:
+            period = _get_fiscal_period_label(net_margin)
+            period_str = f" ({period})" if period else ""
+            lines.append(f"- Net Margin: {net_margin['value']:.1f}%{period_str}")
+        elif isinstance(net_margin, (int, float)):
+            lines.append(f"- Net Margin: {net_margin:.1f}%")
 
         # EPS with fiscal period
         eps = fin.get("eps", {})
@@ -170,8 +180,14 @@ def _format_metrics_for_prompt(extracted: dict) -> str:
         elif isinstance(eps, (int, float)):
             lines.append(f"- EPS: ${eps:.2f}")
 
-        if fin.get("debt_to_equity"):
-            lines.append(f"- Debt/Equity: {fin['debt_to_equity']:.2f}")
+        # Debt/Equity with fiscal period
+        d_to_e = fin.get("debt_to_equity", {})
+        if isinstance(d_to_e, dict) and d_to_e.get("value") is not None:
+            period = _get_fiscal_period_label(d_to_e)
+            period_str = f" ({period})" if period else ""
+            lines.append(f"- Debt/Equity: {d_to_e['value']:.2f}{period_str}")
+        elif isinstance(d_to_e, (int, float)):
+            lines.append(f"- Debt/Equity: {d_to_e:.2f}")
 
         # Free Cash Flow with fiscal period
         fcf = fin.get("free_cash_flow", {})
