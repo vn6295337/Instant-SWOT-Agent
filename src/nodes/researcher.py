@@ -132,7 +132,9 @@ def researcher_node(state, workflow_id=None, progress_store=None):
             raise RuntimeError(f"All MCP servers failed for {company}. Check API configurations.")
 
     except Exception as e:
-        print(f"Research failed: {e}")
-        raise RuntimeError(f"Research failed for {company}: {str(e)}")
+        error_msg = str(e)
+        print(f"Research failed: {error_msg}")
+        add_log("researcher", f"ERROR: {error_msg}")
+        raise RuntimeError(f"Research failed for {company}: {error_msg}")
 
     return state

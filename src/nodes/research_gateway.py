@@ -218,7 +218,13 @@ async def call_research_service(
     if add_log:
         add_log("researcher", f"Submitting research task for {company} ({ticker})...")
 
-    result = await send_message(message)
+    try:
+        result = await send_message(message)
+    except ResearchGatewayError as e:
+        if add_log:
+            add_log("researcher", f"A2A request failed: {str(e)}")
+        raise
+
     task_id = result.get("task", {}).get("id")
 
     if not task_id:
