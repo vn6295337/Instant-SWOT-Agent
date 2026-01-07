@@ -88,6 +88,7 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
                     "raw_report": cached.get("raw_report", ""),
                     "data_source": "cache",
                     "provider_used": cached.get("provider_used", "cached"),
+                    "raw_data": cached.get("raw_data", {}),
                     "_cache_info": cached.get("_cache_info", {})
                 }
             })
@@ -196,6 +197,17 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
             })
             return
 
+        # Parse raw_data for MCP display
+        raw_data_parsed = {}
+        try:
+            raw_data_str = result.get("raw_data", "{}")
+            if isinstance(raw_data_str, str):
+                raw_data_parsed = json.loads(raw_data_str)
+            else:
+                raw_data_parsed = raw_data_str or {}
+        except Exception as e:
+            logger.warning(f"Could not parse raw_data: {e}")
+
         # Build final result
         final_result = {
             "company_name": company_name,
@@ -206,7 +218,8 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
             "swot_data": swot_data,
             "raw_report": result.get("draft_report", ""),
             "data_source": result.get("data_source", "unknown"),
-            "provider_used": result.get("provider_used", "unknown")
+            "provider_used": result.get("provider_used", "unknown"),
+            "raw_data": raw_data_parsed
         }
 
         # Cache the final result
