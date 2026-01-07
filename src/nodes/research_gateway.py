@@ -146,9 +146,13 @@ async def wait_for_completion(
                 value = metric.get("value")
                 if not source or not metric_name:
                     continue
+                # Extract temporal fields
+                end_date = metric.get("end_date")
+                fiscal_year = metric.get("fiscal_year")
+                form = metric.get("form")
                 metric_key = f"{source}:{metric_name}:{value}"
                 if metric_key not in emitted_metrics:
-                    progress_callback(source, metric_name, value)
+                    progress_callback(source, metric_name, value, end_date, fiscal_year, form)
                     emitted_metrics.add(metric_key)
 
         if status == "completed":

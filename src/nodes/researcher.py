@@ -76,11 +76,13 @@ def researcher_node(state, workflow_id=None, progress_store=None):
             add_activity_log(workflow_id, step, message)
 
     # Create progress callback for granular metric events
-    def progress_callback(source: str, metric: str, value):
+    def progress_callback(source: str, metric: str, value,
+                          end_date: str = None, fiscal_year: int = None, form: str = None):
         if workflow_id and progress_store:
             # Import here to avoid circular imports
             from src.services.workflow_store import add_metric
-            add_metric(workflow_id, source, metric, value)
+            add_metric(workflow_id, source, metric, value,
+                       end_date=end_date, fiscal_year=fiscal_year, form=form)
 
     try:
         # Fetch via Research Gateway (A2A protocol)
