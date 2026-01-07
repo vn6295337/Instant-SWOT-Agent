@@ -266,14 +266,26 @@ Remember: Every bullet point must reference actual data provided above. Do not i
     response, provider, error, providers_failed = llm.query(prompt, temperature=0)
     elapsed = time.time() - start_time
 
-    # Log failed providers
+    # Log failed providers and update LLM status in real-time
     for pf in providers_failed:
         _add_activity_log(workflow_id, progress_store, "analyzer", f"LLM {pf['name']} failed: {pf['error']}")
+        # Update LLM status in real-time for frontend
+        if workflow_id and progress_store and workflow_id in progress_store:
+            llm_status = progress_store[workflow_id].get("llm_status", {})
+            if pf["name"] in llm_status:
+                llm_status[pf["name"]] = "failed"
 
     # Track failed providers in state for frontend
     if "llm_providers_failed" not in state:
         state["llm_providers_failed"] = []
     state["llm_providers_failed"].extend([pf["name"] for pf in providers_failed])
+
+    # Update successful provider status
+    if provider and workflow_id and progress_store and workflow_id in progress_store:
+        llm_status = progress_store[workflow_id].get("llm_status", {})
+        provider_name = provider.split(":")[0]
+        if provider_name in llm_status:
+            llm_status[provider_name] = "completed"
 
     if error:
         state["draft_report"] = f"Error generating analysis: {error}"

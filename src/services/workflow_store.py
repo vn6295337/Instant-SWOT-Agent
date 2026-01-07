@@ -150,6 +150,7 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
                 add_activity_log(workflow_id, source, f"MCP server failed")
 
         # Update LLM status based on failed providers and used provider
+        # IMPORTANT: Do this BEFORE checking for errors so frontend sees failures
         llm_providers_failed = result.get("llm_providers_failed", [])
         provider_used = result.get("provider_used", "")
         llm_status = WORKFLOWS[workflow_id]["llm_status"]
@@ -158,12 +159,25 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
         for provider in llm_providers_failed:
             if provider in llm_status:
                 llm_status[provider] = "failed"
+                add_activity_log(workflow_id, "llm", f"{provider.capitalize()} provider failed")
 
         # Mark the used provider as completed
         if provider_used:
             provider_name = provider_used.split(":")[0]
             if provider_name in llm_status:
                 llm_status[provider_name] = "completed"
+
+        # Check if workflow ended with an error (LLM failures etc)
+        # Do this BEFORE parsing SWOT so we properly abort on errors
+        if result.get("error"):
+            error_msg = result.get("error")
+            add_activity_log(workflow_id, "workflow", f"Workflow failed: {error_msg}")
+            WORKFLOWS[workflow_id].update({
+                "status": "aborted",
+                "error": error_msg,
+                "current_step": "aborted"
+            })
+            return
 
         # Parse SWOT from draft report
         swot_data = parse_swot_text(result.get("draft_report", ""))
@@ -185,17 +199,6 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
                             existing.add(item.lower()[:50])
         except Exception as e:
             logger.warning(f"Could not merge MCP SWOT data: {e}")
-
-        # Check if workflow ended with an error (LLM failures etc)
-        if result.get("error"):
-            error_msg = result.get("error")
-            add_activity_log(workflow_id, "workflow", f"Workflow failed: {error_msg}")
-            WORKFLOWS[workflow_id].update({
-                "status": "aborted",
-                "error": error_msg,
-                "current_step": "aborted"
-            })
-            return
 
         # Parse raw_data for MCP display
         raw_data_parsed = {}
@@ -238,11 +241,12 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
     except Exception as e:
         error_msg = str(e)
         # Determine if this is an abort (critical) or error (retryable)
-        # Aborts: Core MCP failures, insufficient data
+        # Aborts: Core MCP failures, insufficient data, LLM failures
         is_abort = any(phrase in error_msg for phrase in [
             "Insufficient core data",
             "All MCP servers failed",
-            "Need at least 2 of"
+            "Need at least 2 of",
+            "All LLM providers failed"
         ])
 
         WORKFLOWS[workflow_id].update({
