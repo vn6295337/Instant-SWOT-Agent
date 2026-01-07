@@ -135,16 +135,20 @@ async def wait_for_completion(
 
         # Emit partial metrics during WORKING status
         if status == "working" and progress_callback:
-            partial_metrics = task.get("partial_metrics", [])
+            partial_metrics = task.get("partial_metrics", []) or []
             for metric in partial_metrics:
+                # Skip None or invalid metrics
+                if not metric or not isinstance(metric, dict):
+                    continue
                 # Create unique key to avoid duplicate emissions
-                metric_key = f"{metric.get('source')}:{metric.get('metric')}:{metric.get('value')}"
+                source = metric.get("source")
+                metric_name = metric.get("metric")
+                value = metric.get("value")
+                if not source or not metric_name:
+                    continue
+                metric_key = f"{source}:{metric_name}:{value}"
                 if metric_key not in emitted_metrics:
-                    progress_callback(
-                        metric.get("source"),
-                        metric.get("metric"),
-                        metric.get("value")
-                    )
+                    progress_callback(source, metric_name, value)
                     emitted_metrics.add(metric_key)
 
         if status == "completed":

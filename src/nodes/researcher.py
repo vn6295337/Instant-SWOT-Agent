@@ -91,6 +91,11 @@ def researcher_node(state, workflow_id=None, progress_store=None):
             progress_callback=progress_callback,
             add_log=add_log
         ))
+
+        # Validate result
+        if not result or not isinstance(result, dict):
+            raise RuntimeError(f"Research Service returned invalid data for {company}")
+
         state["data_source"] = "a2a"
         # Note: Metrics are streamed via partial_metrics during A2A polling
 
