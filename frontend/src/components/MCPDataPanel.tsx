@@ -8,13 +8,19 @@ import {
   Globe,
   Newspaper,
   MessageSquare,
-  ExternalLink
+  ExternalLink,
+  Building2,
+  MapPin,
+  Briefcase,
+  Database
 } from "lucide-react"
 
 interface MCPDataPanelProps {
   metrics: MetricEntry[]
   rawData?: MCPRawData
   mcpStatus?: MCPStatus
+  companyName?: string
+  ticker?: string
 }
 
 // Format numbers for display
@@ -106,7 +112,7 @@ function LinkItem({ title, url }: LinkItemProps) {
   )
 }
 
-export function MCPDataPanel({ metrics, rawData, mcpStatus }: MCPDataPanelProps) {
+export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker }: MCPDataPanelProps) {
   // Group metrics by source
   const groupedMetrics = React.useMemo(() => {
     const groups: Record<string, Array<{metric: string, value: string | number}>> = {
@@ -146,6 +152,21 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus }: MCPDataPanelProps)
     return []
   }, [rawData])
 
+  // Extract company profile info from raw_data if available
+  const companyProfile = React.useMemo(() => {
+    if (!rawData) return null
+
+    // Try to get profile from valuation or company_info
+    const profile = rawData.metrics?.valuation?.profile || rawData.company_info || {}
+    return {
+      sector: profile.sector || profile.industry || null,
+      hqLocation: profile.city && profile.state
+        ? `${profile.city}, ${profile.state}${profile.country ? `, ${profile.country}` : ''}`
+        : profile.address || profile.location || null,
+      employees: profile.fullTimeEmployees || profile.employees || null,
+    }
+  }, [rawData])
+
   // Check if we have any data at all
   const hasAnyData = metrics.length > 0 || newsArticles.length > 0
 
@@ -153,13 +174,60 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus }: MCPDataPanelProps)
     return null
   }
 
-  return (
-    <div className="bg-card rounded-lg border border-border overflow-hidden">
-      <div className="px-3 py-2 bg-muted/50 border-b border-border">
-        <h3 className="text-sm font-medium text-foreground">Source Data</h3>
-      </div>
+  // Data sources with expanded names
+  const dataSources = [
+    { abbr: 'SEC', full: 'Securities and Exchange Commission (SEC) EDGAR' },
+    { abbr: 'FRED', full: 'Federal Reserve Economic Data (FRED)' },
+    { abbr: 'Yahoo', full: 'Yahoo Finance' },
+    { abbr: 'Tavily', full: 'Tavily News API' },
+    { abbr: 'Finnhub', full: 'Finnhub Market Data' },
+  ]
 
-      <div className="divide-y divide-border">
+  return (
+    <div className="space-y-4">
+      {/* Company Details */}
+      {(companyName || ticker) && (
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
+          <div className="px-3 py-2 bg-muted/50 border-b border-border">
+            <h3 className="text-sm font-medium text-foreground">Company Profile</h3>
+          </div>
+          <div className="p-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            {companyName && (
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium">{companyName}</span>
+                {ticker && <span className="text-muted-foreground">({ticker})</span>}
+              </div>
+            )}
+            {companyProfile?.sector && (
+              <div className="flex items-center gap-2">
+                <Briefcase className="h-4 w-4 text-muted-foreground" />
+                <span>{companyProfile.sector}</span>
+              </div>
+            )}
+            {companyProfile?.hqLocation && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span>{companyProfile.hqLocation}</span>
+              </div>
+            )}
+            {companyProfile?.employees && (
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Employees:</span>
+                <span>{Number(companyProfile.employees).toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Source Data */}
+      <div className="bg-card rounded-lg border border-border overflow-hidden">
+        <div className="px-3 py-2 bg-muted/50 border-b border-border">
+          <h3 className="text-sm font-medium text-foreground">Source Data</h3>
+        </div>
+
+        <div className="divide-y divide-border">
         {/* Financials */}
         <MCPRow
           icon={<DollarSign className="h-4 w-4" />}
@@ -237,6 +305,25 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus }: MCPDataPanelProps)
             <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
           ))}
         </MCPRow>
+        </div>
+      </div>
+
+      {/* Data Sources */}
+      <div className="bg-card rounded-lg border border-border overflow-hidden">
+        <div className="px-3 py-2 bg-muted/50 border-b border-border">
+          <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            Data Sources
+          </h3>
+        </div>
+        <div className="p-3 text-xs text-muted-foreground">
+          <p className="mb-2">Financial data sourced from:</p>
+          <ul className="space-y-1 pl-2">
+            {dataSources.map((source, i) => (
+              <li key={i}>• {source.full}</li>
+            ))}
+          </ul>
+        </div>
       </div>
     </div>
   )

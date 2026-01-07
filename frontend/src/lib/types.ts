@@ -27,6 +27,17 @@ export interface MCPRawData {
   sources_available?: string[]
   sources_failed?: string[]
   metrics?: Record<string, unknown>
+  company_info?: {
+    sector?: string
+    industry?: string
+    city?: string
+    state?: string
+    country?: string
+    address?: string
+    location?: string
+    fullTimeEmployees?: number
+    employees?: number
+  }
   // Financials MCP
   financials?: {
     revenue?: number
