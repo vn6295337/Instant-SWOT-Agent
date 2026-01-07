@@ -21,6 +21,8 @@ interface MCPDataPanelProps {
   mcpStatus?: MCPStatus
   companyName?: string
   ticker?: string
+  exchange?: string
+  cik?: string
 }
 
 // Format numbers for display
@@ -112,7 +114,7 @@ function LinkItem({ title, url }: LinkItemProps) {
   )
 }
 
-export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker }: MCPDataPanelProps) {
+export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker, exchange, cik }: MCPDataPanelProps) {
   // Group metrics by source
   const groupedMetrics = React.useMemo(() => {
     const groups: Record<string, Array<{metric: string, value: string | number}>> = {
@@ -199,6 +201,13 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker 
                 {ticker && <span className="text-muted-foreground">({ticker})</span>}
               </div>
             )}
+            {(exchange || cik) && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                {exchange && <span>{exchange}</span>}
+                {exchange && cik && <span>•</span>}
+                {cik && <span>CIK: {cik}</span>}
+              </div>
+            )}
             {companyProfile?.sector && (
               <div className="flex items-center gap-2">
                 <Briefcase className="h-4 w-4 text-muted-foreground" />
@@ -221,10 +230,10 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker 
         </div>
       )}
 
-      {/* Source Data */}
+      {/* Key Data */}
       <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="px-3 py-2 bg-muted/50 border-b border-border">
-          <h3 className="text-sm font-medium text-foreground">Source Data</h3>
+          <h3 className="text-sm font-medium text-foreground">Key Data</h3>
         </div>
 
         <div className="divide-y divide-border">
@@ -316,13 +325,12 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker 
             Data Sources
           </h3>
         </div>
-        <div className="p-3 text-xs text-muted-foreground">
-          <p className="mb-2">Financial data sourced from:</p>
-          <ul className="space-y-1 pl-2">
+        <div className="p-3">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {dataSources.map((source, i) => (
-              <li key={i}>• {source.full}</li>
+              <span key={i} title={source.full}>{source.abbr}</span>
             ))}
-          </ul>
+          </div>
         </div>
       </div>
     </div>
