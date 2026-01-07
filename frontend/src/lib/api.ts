@@ -24,12 +24,16 @@ export interface ActivityLogEntry {
   message: string
 }
 
-// Granular metric entry
+// Granular metric entry with optional temporal data
 export interface MetricEntry {
   timestamp: string
   source: string   // "volatility", "valuation", "financials", etc.
   metric: string   // "beta", "P/E", "revenue", etc.
   value: string | number
+  // Temporal fields (from SEC EDGAR data)
+  end_date?: string       // Fiscal period end date, e.g., "2023-09-30"
+  fiscal_year?: number    // Fiscal year number, e.g., 2023
+  form?: string           // SEC form type: "10-K" (annual) or "10-Q" (quarterly)
 }
 
 // MCP status for each server (partial = some data but with errors)

@@ -12,8 +12,44 @@ def _add_activity_log(workflow_id, progress_store, step, message):
         add_activity_log(workflow_id, step, message)
 
 
+def _extract_temporal_metric(metric_data: dict) -> dict:
+    """Extract metric value with temporal metadata (fiscal year, period end, form type)."""
+    if not isinstance(metric_data, dict):
+        return {"value": metric_data}
+    return {
+        "value": metric_data.get("value"),
+        "end_date": metric_data.get("end_date"),
+        "fiscal_year": metric_data.get("fiscal_year"),
+        "form": metric_data.get("form"),  # "10-K" (annual) or "10-Q" (quarterly)
+    }
+
+
+def _get_fiscal_period_label(metric: dict) -> str:
+    """Format fiscal period label from temporal data (e.g., 'FY 2023' or 'Q3 2024')."""
+    if not isinstance(metric, dict):
+        return ""
+    form = metric.get("form", "")
+    fy = metric.get("fiscal_year")
+    end_date = metric.get("end_date")
+
+    if not fy:
+        return ""
+
+    if form == "10-K":
+        return f"FY {fy}"
+    elif form == "10-Q" and end_date:
+        try:
+            # Parse quarter from end date
+            month = int(end_date.split("-")[1])
+            quarter = (month - 1) // 3 + 1
+            return f"Q{quarter} {fy}"
+        except (ValueError, IndexError):
+            return f"FY {fy}"
+    return f"FY {fy}"
+
+
 def _extract_key_metrics(raw_data: str) -> dict:
-    """Extract and format key metrics from raw JSON data."""
+    """Extract and format key metrics from raw JSON data, preserving temporal info."""
     try:
         data = json.loads(raw_data)
     except json.JSONDecodeError:
@@ -32,17 +68,18 @@ def _extract_key_metrics(raw_data: str) -> dict:
         "aggregated_swot": data.get("aggregated_swot", {})
     }
 
-    # Extract financials
+    # Extract financials with temporal data
     fin = metrics.get("financials", {})
     if fin and "error" not in fin:
         fin_data = fin.get("financials", {})
         extracted["financials"] = {
-            "revenue": fin_data.get("revenue", {}).get("value"),
+            "revenue": _extract_temporal_metric(fin_data.get("revenue", {})),
             "revenue_cagr_3yr": fin_data.get("revenue_cagr_3yr"),
             "net_margin": fin_data.get("net_margin"),
-            "eps": fin_data.get("eps", {}).get("value"),
+            "eps": _extract_temporal_metric(fin_data.get("eps", {})),
             "debt_to_equity": fin.get("debt", {}).get("debt_to_equity"),
-            "free_cash_flow": fin.get("cash_flow", {}).get("free_cash_flow", {}).get("value"),
+            "free_cash_flow": _extract_temporal_metric(fin.get("cash_flow", {}).get("free_cash_flow", {})),
+            "net_income": _extract_temporal_metric(fin_data.get("net_income", {})),
         }
 
     # Extract valuation
@@ -106,22 +143,45 @@ def _format_metrics_for_prompt(extracted: dict) -> str:
     lines.append(f"Company: {extracted['company']} ({extracted['ticker']})")
     lines.append("")
 
-    # Financials
+    # Financials (with temporal context)
     fin = extracted.get("financials", {})
     if fin:
         lines.append("=== FINANCIALS (from SEC EDGAR) ===")
-        if fin.get("revenue"):
-            lines.append(f"- Revenue: ${fin['revenue']:,.0f}" if isinstance(fin['revenue'], (int, float)) else f"- Revenue: {fin['revenue']}")
+        # Revenue with fiscal period
+        revenue = fin.get("revenue", {})
+        if isinstance(revenue, dict) and revenue.get("value"):
+            period = _get_fiscal_period_label(revenue)
+            period_str = f" ({period})" if period else ""
+            lines.append(f"- Revenue: ${revenue['value']:,.0f}{period_str}")
+        elif isinstance(revenue, (int, float)):
+            lines.append(f"- Revenue: ${revenue:,.0f}")
+
         if fin.get("revenue_cagr_3yr"):
             lines.append(f"- Revenue CAGR (3yr): {fin['revenue_cagr_3yr']:.1f}%")
         if fin.get("net_margin"):
             lines.append(f"- Net Margin: {fin['net_margin']:.1f}%")
-        if fin.get("eps"):
-            lines.append(f"- EPS: ${fin['eps']:.2f}")
+
+        # EPS with fiscal period
+        eps = fin.get("eps", {})
+        if isinstance(eps, dict) and eps.get("value"):
+            period = _get_fiscal_period_label(eps)
+            period_str = f" ({period})" if period else ""
+            lines.append(f"- EPS: ${eps['value']:.2f}{period_str}")
+        elif isinstance(eps, (int, float)):
+            lines.append(f"- EPS: ${eps:.2f}")
+
         if fin.get("debt_to_equity"):
             lines.append(f"- Debt/Equity: {fin['debt_to_equity']:.2f}")
-        if fin.get("free_cash_flow"):
-            lines.append(f"- Free Cash Flow: ${fin['free_cash_flow']:,.0f}" if isinstance(fin['free_cash_flow'], (int, float)) else f"- Free Cash Flow: {fin['free_cash_flow']}")
+
+        # Free Cash Flow with fiscal period
+        fcf = fin.get("free_cash_flow", {})
+        if isinstance(fcf, dict) and fcf.get("value"):
+            period = _get_fiscal_period_label(fcf)
+            period_str = f" ({period})" if period else ""
+            lines.append(f"- Free Cash Flow: ${fcf['value']:,.0f}{period_str}")
+        elif isinstance(fcf, (int, float)):
+            lines.append(f"- Free Cash Flow: ${fcf:,.0f}")
+
         lines.append("")
 
     # Valuation

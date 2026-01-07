@@ -33,24 +33,61 @@ def add_activity_log(workflow_id: str, step: str, message: str):
         })
 
 
-def add_metric(workflow_id: str, source: str, metric: str, value):
-    """Add a metric to the workflow metrics array and activity log."""
+def add_metric(workflow_id: str, source: str, metric: str, value,
+               end_date: str = None, fiscal_year: int = None, form: str = None):
+    """Add a metric to the workflow metrics array and activity log.
+
+    Args:
+        workflow_id: Workflow identifier
+        source: Data source (e.g., 'financials', 'valuation')
+        metric: Metric name (e.g., 'Revenue', 'P/E')
+        value: Metric value
+        end_date: Fiscal period end date (e.g., '2023-09-30')
+        fiscal_year: Fiscal year number (e.g., 2023)
+        form: SEC form type ('10-K' for annual, '10-Q' for quarterly)
+    """
     if workflow_id in WORKFLOWS:
         if "metrics" not in WORKFLOWS[workflow_id]:
             WORKFLOWS[workflow_id]["metrics"] = []
-        WORKFLOWS[workflow_id]["metrics"].append({
+
+        metric_entry = {
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "source": source,
             "metric": metric,
             "value": value
-        })
-        # Also add to activity log for visibility
+        }
+
+        # Add temporal fields if provided
+        if end_date:
+            metric_entry["end_date"] = end_date
+        if fiscal_year:
+            metric_entry["fiscal_year"] = fiscal_year
+        if form:
+            metric_entry["form"] = form
+
+        WORKFLOWS[workflow_id]["metrics"].append(metric_entry)
+
+        # Build display value with fiscal period if available
         display_value = f"{value:.2f}" if isinstance(value, float) else str(value)
+        if fiscal_year:
+            period_label = f"FY {fiscal_year}" if form == "10-K" else f"Q{_quarter_from_date(end_date)} {fiscal_year}" if end_date else f"FY {fiscal_year}"
+            display_value = f"{display_value} ({period_label})"
         add_activity_log(workflow_id, source, f"Fetched {metric}: {display_value}")
 
         # Update MCP status to completed when we get a metric
         if "mcp_status" in WORKFLOWS[workflow_id] and source in WORKFLOWS[workflow_id]["mcp_status"]:
             WORKFLOWS[workflow_id]["mcp_status"][source] = "completed"
+
+
+def _quarter_from_date(date_str: str) -> int:
+    """Extract quarter number from a date string (YYYY-MM-DD)."""
+    if not date_str:
+        return 0
+    try:
+        month = int(date_str.split("-")[1])
+        return (month - 1) // 3 + 1
+    except (ValueError, IndexError):
+        return 0
 
 
 def update_mcp_status(workflow_id: str, source: str, status: str):

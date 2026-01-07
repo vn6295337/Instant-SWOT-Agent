@@ -40,6 +40,25 @@ function formatValue(value: string | number): string {
   return num.toFixed(2)
 }
 
+// Format fiscal period label (e.g., "FY 2023" or "Q3 2024")
+function formatFiscalPeriod(form?: string, fiscalYear?: number, endDate?: string): string | null {
+  if (!fiscalYear) return null
+
+  if (form === '10-K') {
+    return `FY ${fiscalYear}`
+  } else if (form === '10-Q' && endDate) {
+    try {
+      // Parse quarter from end date (YYYY-MM-DD)
+      const month = parseInt(endDate.split('-')[1], 10)
+      const quarter = Math.ceil(month / 3)
+      return `Q${quarter} ${fiscalYear}`
+    } catch {
+      return `FY ${fiscalYear}`
+    }
+  }
+  return `FY ${fiscalYear}`
+}
+
 // MCP row component
 interface MCPRowProps {
   icon: React.ReactNode
@@ -78,17 +97,28 @@ function MCPRow({ icon, label, color, children, status }: MCPRowProps) {
   )
 }
 
-// Data item component
+// Data item component with optional fiscal period
 interface DataItemProps {
   label: string
   value: string
+  fiscalPeriod?: string | null  // e.g., "FY 2023" or "Q3 2024"
+  endDate?: string              // For tooltip: "2023-09-30"
 }
 
-function DataItem({ label, value }: DataItemProps) {
+function DataItem({ label, value, fiscalPeriod, endDate }: DataItemProps) {
   return (
-    <span className="whitespace-nowrap">
+    <span className="whitespace-nowrap group relative">
       <span className="text-muted-foreground">{label}:</span>{' '}
       <span className="text-foreground font-medium">{value}</span>
+      {fiscalPeriod && (
+        <span className="text-xs text-muted-foreground ml-1">({fiscalPeriod})</span>
+      )}
+      {/* Hover tooltip for full period details */}
+      {endDate && (
+        <span className="hidden group-hover:block absolute bottom-full left-0 mb-1 bg-popover border border-border rounded px-2 py-1 text-xs shadow-lg z-10 whitespace-nowrap">
+          Period ending: {endDate}
+        </span>
+      )}
     </span>
   )
 }
@@ -115,9 +145,14 @@ function LinkItem({ title, url }: LinkItemProps) {
 }
 
 export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker, exchange, cik }: MCPDataPanelProps) {
-  // Group metrics by source
+  // Group metrics by source, including temporal data
   const groupedMetrics = React.useMemo(() => {
-    const groups: Record<string, Array<{metric: string, value: string | number}>> = {
+    const groups: Record<string, Array<{
+      metric: string
+      value: string | number
+      fiscalPeriod?: string | null
+      endDate?: string
+    }>> = {
       financials: [],
       valuation: [],
       volatility: [],
@@ -129,7 +164,14 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
     for (const m of metrics) {
       const source = m.source.toLowerCase()
       if (source in groups) {
-        groups[source].push({ metric: m.metric, value: m.value })
+        // Format fiscal period if temporal data is available
+        const fiscalPeriod = formatFiscalPeriod(m.form, m.fiscal_year, m.end_date)
+        groups[source].push({
+          metric: m.metric,
+          value: m.value,
+          fiscalPeriod,
+          endDate: m.end_date
+        })
       }
     }
 
@@ -237,7 +279,7 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
         </div>
 
         <div className="divide-y divide-border">
-        {/* Financials */}
+        {/* Financials - with fiscal period labels */}
         <MCPRow
           icon={<DollarSign className="h-4 w-4" />}
           label="Financials"
@@ -245,7 +287,13 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
           status={mcpStatus?.financials}
         >
           {groupedMetrics.financials.map((m, i) => (
-            <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
+            <DataItem
+              key={i}
+              label={m.metric}
+              value={formatValue(m.value)}
+              fiscalPeriod={m.fiscalPeriod}
+              endDate={m.endDate}
+            />
           ))}
         </MCPRow>
 
@@ -257,7 +305,13 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
           status={mcpStatus?.valuation}
         >
           {groupedMetrics.valuation.map((m, i) => (
-            <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
+            <DataItem
+              key={i}
+              label={m.metric}
+              value={formatValue(m.value)}
+              fiscalPeriod={m.fiscalPeriod}
+              endDate={m.endDate}
+            />
           ))}
         </MCPRow>
 
@@ -269,7 +323,13 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
           status={mcpStatus?.volatility}
         >
           {groupedMetrics.volatility.map((m, i) => (
-            <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
+            <DataItem
+              key={i}
+              label={m.metric}
+              value={formatValue(m.value)}
+              fiscalPeriod={m.fiscalPeriod}
+              endDate={m.endDate}
+            />
           ))}
         </MCPRow>
 
@@ -281,7 +341,13 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
           status={mcpStatus?.macro}
         >
           {groupedMetrics.macro.map((m, i) => (
-            <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
+            <DataItem
+              key={i}
+              label={m.metric}
+              value={formatValue(m.value)}
+              fiscalPeriod={m.fiscalPeriod}
+              endDate={m.endDate}
+            />
           ))}
         </MCPRow>
 
@@ -311,7 +377,13 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
           status={mcpStatus?.sentiment}
         >
           {groupedMetrics.sentiment.map((m, i) => (
-            <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
+            <DataItem
+              key={i}
+              label={m.metric}
+              value={formatValue(m.value)}
+              fiscalPeriod={m.fiscalPeriod}
+              endDate={m.endDate}
+            />
           ))}
         </MCPRow>
         </div>

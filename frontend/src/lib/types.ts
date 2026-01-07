@@ -2,6 +2,14 @@ export interface AnalysisRequest {
   company_name: string
 }
 
+// Metric with temporal metadata (fiscal year, period end, form type)
+export interface TemporalMetric {
+  value: number | null
+  end_date?: string       // Fiscal period end date, e.g., "2023-09-30"
+  fiscal_year?: number    // Fiscal year number, e.g., 2023
+  form?: string           // SEC form type: "10-K" (annual) or "10-Q" (quarterly)
+}
+
 // News article from MCP
 export interface NewsArticle {
   title: string
@@ -38,16 +46,19 @@ export interface MCPRawData {
     fullTimeEmployees?: number
     employees?: number
   }
-  // Financials MCP
+  // Financials MCP (with temporal data for SEC EDGAR metrics)
   financials?: {
-    revenue?: number
+    revenue?: TemporalMetric | number
     gross_margin?: number
     operating_margin?: number
     net_margin?: number
     debt_to_equity?: number
     current_ratio?: number
-    cash_flow?: number
-    [key: string]: unknown
+    cash_flow?: TemporalMetric | number
+    eps?: TemporalMetric | number
+    net_income?: TemporalMetric | number
+    free_cash_flow?: TemporalMetric | number
+    [key: string]: TemporalMetric | number | unknown
   }
   // Valuation MCP
   valuation?: {
