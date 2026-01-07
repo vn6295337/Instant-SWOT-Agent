@@ -14,10 +14,9 @@ import {
   GitBranch,
   TrendingUp,
   DollarSign,
-  BarChart3,
+  Activity,
   Globe,
   Newspaper,
-  Heart,
 } from "lucide-react"
 import type { MCPStatus, LLMStatus } from "@/lib/api"
 
@@ -79,12 +78,12 @@ const NODES = {
 const MCP_START_X = NODES.researcher.x + NODE_SIZE / 2 + 40
 const MCP_GAP = 38
 const MCP_SERVERS = [
-  { id: 'financials', label: 'Financials', icon: TrendingUp, x: MCP_START_X },
-  { id: 'valuation', label: 'Valuation', icon: DollarSign, x: MCP_START_X + MCP_GAP },
-  { id: 'volatility', label: 'Volatility', icon: BarChart3, x: MCP_START_X + MCP_GAP * 2 },
-  { id: 'macro', label: 'Macro', icon: Globe, x: MCP_START_X + MCP_GAP * 3 },
+  { id: 'financials', label: 'Financials', icon: DollarSign, x: MCP_START_X },
+  { id: 'valuation', label: 'Valuation', icon: TrendingUp, x: MCP_START_X + MCP_GAP },
+  { id: 'volatility', label: 'Volatility', icon: Activity, x: MCP_START_X + MCP_GAP * 2 },
+  { id: 'macro', label: 'Macro (US)', icon: Globe, x: MCP_START_X + MCP_GAP * 3 },
   { id: 'news', label: 'News', icon: Newspaper, x: MCP_START_X + MCP_GAP * 4 },
-  { id: 'sentiment', label: 'Sentiment', icon: Heart, x: MCP_START_X + MCP_GAP * 5 },
+  { id: 'sentiment', label: 'Sentiment', icon: MessageSquare, x: MCP_START_X + MCP_GAP * 5 },
 ]
 
 const AGENTS_CENTER_X = (NODES.analyzer.x + NODES.editor.x) / 2

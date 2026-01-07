@@ -609,8 +609,8 @@
   header,
   footer,
   aside,
-  .print\\:hidden,
-  button:not(.print\\:block),
+  .print\:hidden,
+  button:not(.print\:block),
   [role="tablist"] {
     display: none !important;
   }
@@ -619,6 +619,8 @@
   main {
     width: 100% !important;
     max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
   .container {
@@ -632,26 +634,55 @@
     opacity: 1 !important;
   }
 
-  /* Clean card styles */
+  /* Compact card styles for single page fit */
   .card {
     border: 1px solid #ddd !important;
     box-shadow: none !important;
     break-inside: avoid;
     page-break-inside: avoid;
+    margin-bottom: 0.5rem !important;
   }
 
-  /* Ensure text is black */
+  .card-header {
+    padding: 0.5rem 0.75rem !important;
+  }
+
+  .card-content {
+    padding: 0.5rem 0.75rem !important;
+  }
+
+  /* Ensure text is black - compact sizing */
   body {
     color: black !important;
     background: white !important;
-    font-size: 12pt;
-    line-height: 1.5;
+    font-size: 10pt;
+    line-height: 1.3;
   }
 
-  /* Page margins */
+  /* Page size: 8.27" x 11" (most restrictive common between A4 width and Letter height) */
   @page {
-    margin: 1cm;
-    size: A4;
+    margin: 0.5in;
+    size: 8.27in 11in;
+  }
+
+  /* Compact SWOT grid */
+  .grid.md\:grid-cols-2 {
+    gap: 0.5rem !important;
+  }
+
+  /* Compact list items */
+  ul.space-y-2 {
+    gap: 0.25rem !important;
+  }
+
+  ul.space-y-2 li {
+    margin-bottom: 0.125rem !important;
+  }
+
+  /* Source data panel compact */
+  .divide-y > div {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
   }
 
   /* Prevent orphans and widows */
@@ -660,9 +691,23 @@
     widows: 3;
   }
 
-  /* Add section labels for print */
-  .text-strength::before { content: ""; }
-  .text-weakness::before { content: ""; }
-  .text-opportunity::before { content: ""; }
-  .text-threat::before { content: ""; }
+  /* Hide process flow and metrics panel */
+  .h-\[260px\] {
+    display: none !important;
+  }
+
+  /* Compact headings */
+  h2 {
+    font-size: 14pt !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  h3 {
+    font-size: 11pt !important;
+  }
+
+  /* Quality evaluation compact */
+  .space-y-6 {
+    gap: 0.75rem !important;
+  }
 }

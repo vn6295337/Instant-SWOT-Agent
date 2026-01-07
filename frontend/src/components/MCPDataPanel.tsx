@@ -1,5 +1,5 @@
 import React from "react"
-import type { MetricEntry } from "@/lib/api"
+import type { MetricEntry, MCPStatus } from "@/lib/api"
 import type { MCPRawData } from "@/lib/types"
 import {
   DollarSign,
@@ -14,6 +14,7 @@ import {
 interface MCPDataPanelProps {
   metrics: MetricEntry[]
   rawData?: MCPRawData
+  mcpStatus?: MCPStatus
 }
 
 // Format numbers for display
@@ -37,19 +38,33 @@ interface MCPRowProps {
   label: string
   color: string
   children: React.ReactNode
+  status?: 'idle' | 'executing' | 'completed' | 'partial' | 'failed'
 }
 
-function MCPRow({ icon, label, color, children }: MCPRowProps) {
+function MCPRow({ icon, label, color, children, status }: MCPRowProps) {
   const hasContent = React.Children.toArray(children).length > 0
+  const isFailed = status === 'failed'
+  const isPartial = status === 'partial'
+
+  // Determine what to show when no content
+  const getEmptyMessage = () => {
+    if (isFailed) return 'API unavailable'
+    if (isPartial) return 'Partial data'
+    return 'No data'
+  }
 
   return (
-    <div className={`flex items-center gap-2 py-1.5 px-3 border-b border-border last:border-b-0 ${!hasContent ? 'opacity-40' : ''}`}>
-      <div className={`flex items-center gap-2 w-24 shrink-0 ${color}`}>
+    <div className={`flex items-center gap-2 py-1.5 px-3 border-b border-border last:border-b-0 ${!hasContent && !isFailed ? 'opacity-40' : ''}`}>
+      <div className={`flex items-center gap-2 w-28 shrink-0 ${isFailed ? 'text-red-400' : isPartial ? 'text-amber-400' : color}`}>
         {icon}
         <span className="text-xs font-medium">{label}</span>
       </div>
       <div className="flex-1 flex items-center gap-4 overflow-x-auto text-xs scrollbar-thin">
-        {hasContent ? children : <span className="text-muted-foreground italic">No data</span>}
+        {hasContent ? children : (
+          <span className={`italic ${isFailed ? 'text-red-400' : isPartial ? 'text-amber-400' : 'text-muted-foreground'}`}>
+            {getEmptyMessage()}
+          </span>
+        )}
       </div>
     </div>
   )
@@ -91,7 +106,7 @@ function LinkItem({ title, url }: LinkItemProps) {
   )
 }
 
-export function MCPDataPanel({ metrics, rawData }: MCPDataPanelProps) {
+export function MCPDataPanel({ metrics, rawData, mcpStatus }: MCPDataPanelProps) {
   // Group metrics by source
   const groupedMetrics = React.useMemo(() => {
     const groups: Record<string, Array<{metric: string, value: string | number}>> = {
@@ -150,6 +165,7 @@ export function MCPDataPanel({ metrics, rawData }: MCPDataPanelProps) {
           icon={<DollarSign className="h-4 w-4" />}
           label="Financials"
           color="text-emerald-500"
+          status={mcpStatus?.financials}
         >
           {groupedMetrics.financials.map((m, i) => (
             <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
@@ -161,6 +177,7 @@ export function MCPDataPanel({ metrics, rawData }: MCPDataPanelProps) {
           icon={<TrendingUp className="h-4 w-4" />}
           label="Valuation"
           color="text-blue-500"
+          status={mcpStatus?.valuation}
         >
           {groupedMetrics.valuation.map((m, i) => (
             <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
@@ -172,17 +189,19 @@ export function MCPDataPanel({ metrics, rawData }: MCPDataPanelProps) {
           icon={<Activity className="h-4 w-4" />}
           label="Volatility"
           color="text-yellow-500"
+          status={mcpStatus?.volatility}
         >
           {groupedMetrics.volatility.map((m, i) => (
             <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
           ))}
         </MCPRow>
 
-        {/* Macro */}
+        {/* Macro (US) */}
         <MCPRow
           icon={<Globe className="h-4 w-4" />}
-          label="Macro"
+          label="Macro (US)"
           color="text-purple-500"
+          status={mcpStatus?.macro}
         >
           {groupedMetrics.macro.map((m, i) => (
             <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
@@ -194,6 +213,7 @@ export function MCPDataPanel({ metrics, rawData }: MCPDataPanelProps) {
           icon={<Newspaper className="h-4 w-4" />}
           label="News"
           color="text-orange-500"
+          status={mcpStatus?.news}
         >
           {newsArticles.length > 0 ? (
             newsArticles.map((article, i) => (
@@ -211,6 +231,7 @@ export function MCPDataPanel({ metrics, rawData }: MCPDataPanelProps) {
           icon={<MessageSquare className="h-4 w-4" />}
           label="Sentiment"
           color="text-pink-500"
+          status={mcpStatus?.sentiment}
         >
           {groupedMetrics.sentiment.map((m, i) => (
             <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
