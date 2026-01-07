@@ -26,6 +26,7 @@ export interface SentimentData {
 export interface MCPRawData {
   sources_available?: string[]
   sources_failed?: string[]
+  metrics?: Record<string, unknown>
   // Financials MCP
   financials?: {
     revenue?: number
