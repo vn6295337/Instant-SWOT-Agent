@@ -76,12 +76,29 @@ def researcher_node(state, workflow_id=None, progress_store=None):
             add_activity_log(workflow_id, step, message)
 
     # Create progress callback for granular metric events
-    def progress_callback(source: str, metric: str, value,
-                          end_date: str = None, fiscal_year: int = None, form: str = None):
-        if workflow_id and progress_store:
-            # Import here to avoid circular imports
+    # Supports both dict payload (new) and positional args (legacy)
+    def progress_callback(*args, **kwargs):
+        if args and isinstance(args[0], dict):
+            # New structured payload format
+            p = args[0]
+            src = p.get("source")
+            metric = p.get("metric")
+            value = p.get("value")
+            end_date = p.get("end_date")
+            fiscal_year = p.get("fiscal_year")
+            form = p.get("form")
+        else:
+            # Legacy positional args format
+            src = args[0] if len(args) > 0 else kwargs.get("source")
+            metric = args[1] if len(args) > 1 else kwargs.get("metric")
+            value = args[2] if len(args) > 2 else kwargs.get("value")
+            end_date = args[3] if len(args) > 3 else kwargs.get("end_date")
+            fiscal_year = args[4] if len(args) > 4 else kwargs.get("fiscal_year")
+            form = args[5] if len(args) > 5 else kwargs.get("form")
+
+        if workflow_id and progress_store and src and metric:
             from src.services.workflow_store import add_metric
-            add_metric(workflow_id, source, metric, value,
+            add_metric(workflow_id, src, metric, value,
                        end_date=end_date, fiscal_year=fiscal_year, form=form)
 
     try:
