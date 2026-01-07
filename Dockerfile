@@ -13,7 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY a2a/ ./a2a/
 COPY data/ ./data/
-COPY .env.example ./.env
+# Note: Don't copy .env file - HF Spaces injects secrets as environment variables
+# .env.example is for local development only
 
 # Copy pre-built frontend (built locally and committed)
 COPY static/ ./static/

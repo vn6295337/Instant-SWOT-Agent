@@ -8,14 +8,26 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import os
 from dotenv import load_dotenv
 
 from src.api.routes.analysis import router as analysis_router
 from src.api.routes.stocks import router as stocks_router, load_stock_listings
 from src.services.workflow_store import WORKFLOWS
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from .env file (for local development)
+# In HF Spaces, secrets are injected as environment variables automatically
+load_dotenv()  # Safe to call even if .env doesn't exist
+
+# Debug: Log which LLM providers are available (without exposing keys)
+_llm_providers = []
+if os.getenv("GROQ_API_KEY"):
+    _llm_providers.append("Groq")
+if os.getenv("GEMINI_API_KEY"):
+    _llm_providers.append("Gemini")
+if os.getenv("OPENROUTER_API_KEY"):
+    _llm_providers.append("OpenRouter")
+print(f"[Startup] LLM providers available: {_llm_providers or 'NONE - check HF Spaces secrets!'}")
 
 app = FastAPI(
     title="Instant SWOT Agent API",
@@ -52,9 +64,16 @@ async def startup_event():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    llm_status = {
+        "groq": bool(os.getenv("GROQ_API_KEY")),
+        "gemini": bool(os.getenv("GEMINI_API_KEY")),
+        "openrouter": bool(os.getenv("OPENROUTER_API_KEY")),
+    }
     return {
         "status": "ok",
-        "active_workflows": len(WORKFLOWS)
+        "active_workflows": len(WORKFLOWS),
+        "llm_providers_configured": llm_status,
+        "llm_available": any(llm_status.values())
     }
 
 
