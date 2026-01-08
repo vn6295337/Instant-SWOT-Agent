@@ -182,10 +182,17 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
   const newsArticles = React.useMemo(() => {
     if (!rawData) return []
 
-    // Try to get articles from metrics.news.articles
+    // Try to get articles from metrics.news (field name is "results" from Tavily API)
     const newsData = rawData.metrics?.news || rawData.news
-    if (newsData && 'articles' in newsData) {
-      return (newsData.articles as Array<{title: string, url: string}>).slice(0, 4)
+    if (newsData && typeof newsData === 'object') {
+      // Check "results" first (Tavily API format), then "articles" as fallback
+      const articles = (newsData as Record<string, unknown>).results || (newsData as Record<string, unknown>).articles
+      if (Array.isArray(articles)) {
+        return articles.slice(0, 4).map((a: Record<string, unknown>) => ({
+          title: a.title as string || a.content as string || 'News article',
+          url: a.url as string || a.link as string || '#'
+        }))
+      }
     }
 
     // Fallback: check if news is an array directly
@@ -194,6 +201,45 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
     }
 
     return []
+  }, [rawData])
+
+  // Extract sentiment sources with links from raw_data
+  const sentimentSources = React.useMemo(() => {
+    if (!rawData) return []
+
+    const sentimentData = rawData.metrics?.sentiment || rawData.sentiment
+    if (!sentimentData || typeof sentimentData !== 'object') return []
+
+    const sources: Array<{name: string, score: number | null, url?: string}> = []
+    const metrics = (sentimentData as Record<string, unknown>).metrics as Record<string, unknown> | undefined
+
+    // Finnhub sentiment
+    if (metrics?.finnhub) {
+      const finnhub = metrics.finnhub as Record<string, unknown>
+      sources.push({
+        name: 'Finnhub',
+        score: finnhub.score as number || finnhub.sentiment_score as number || null,
+        url: 'https://finnhub.io'
+      })
+    }
+
+    // Reddit sentiment
+    if (metrics?.reddit) {
+      const reddit = metrics.reddit as Record<string, unknown>
+      sources.push({
+        name: 'Reddit',
+        score: reddit.score as number || null,
+        url: 'https://reddit.com'
+      })
+    }
+
+    // Composite score
+    const composite = (sentimentData as Record<string, unknown>).composite_score as number | undefined
+    if (composite !== undefined && sources.length === 0) {
+      sources.push({ name: 'Composite', score: composite })
+    }
+
+    return sources
   }, [rawData])
 
   // Extract company profile info from raw_data if available
@@ -376,15 +422,39 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
           color="text-pink-500"
           status={mcpStatus?.sentiment}
         >
-          {groupedMetrics.sentiment.map((m, i) => (
-            <DataItem
-              key={i}
-              label={m.metric}
-              value={formatValue(m.value)}
-              fiscalPeriod={m.fiscalPeriod}
-              endDate={m.endDate}
-            />
-          ))}
+          {sentimentSources.length > 0 ? (
+            sentimentSources.map((s, i) => (
+              <span key={i} className="whitespace-nowrap">
+                {s.url ? (
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-pink-400 hover:text-pink-300 hover:underline"
+                  >
+                    {s.name}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">{s.name}</span>
+                )}
+                {s.score !== null && (
+                  <span className="text-foreground font-medium ml-1">
+                    {s.score.toFixed(1)}
+                  </span>
+                )}
+              </span>
+            ))
+          ) : groupedMetrics.sentiment.length > 0 ? (
+            groupedMetrics.sentiment.map((m, i) => (
+              <DataItem
+                key={i}
+                label={m.metric}
+                value={formatValue(m.value)}
+                fiscalPeriod={m.fiscalPeriod}
+                endDate={m.endDate}
+              />
+            ))
+          ) : null}
         </MCPRow>
         </div>
       </div>
