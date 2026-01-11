@@ -133,8 +133,9 @@ async def wait_for_completion(
         task = await get_task_status(task_id)
         status = task.get("status")
 
-        # Emit partial metrics during WORKING status
-        if status == "working" and progress_callback:
+        # Emit partial metrics during WORKING or COMPLETED status
+        # Important: Also process on COMPLETED to catch metrics from final sources
+        if (status in ("working", "completed")) and progress_callback:
             partial_metrics = task.get("partial_metrics", []) or []
             for metric in partial_metrics:
                 # Skip None or invalid metrics
