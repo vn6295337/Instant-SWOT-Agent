@@ -1,24 +1,16 @@
 import React from "react"
-import type { MetricEntry, MCPStatus } from "@/lib/api"
+import type { MetricEntry } from "@/lib/api"
 import type { MCPRawData } from "@/lib/types"
 import {
-  DollarSign,
-  TrendingUp,
-  Activity,
-  Globe,
-  Newspaper,
-  MessageSquare,
   ExternalLink,
   Building2,
   MapPin,
-  Briefcase,
-  Database
+  Briefcase
 } from "lucide-react"
 
 interface MCPDataPanelProps {
   metrics: MetricEntry[]
   rawData?: MCPRawData
-  mcpStatus?: MCPStatus
   companyName?: string
   ticker?: string
   exchange?: string
@@ -40,6 +32,43 @@ function formatValue(value: string | number): string {
   return num.toFixed(2)
 }
 
+// Infer data source from category and metric
+function inferDataSource(category: string, metric: string, form?: string): string {
+  const lowerMetric = metric.toLowerCase()
+
+  if (category === 'fundamentals') {
+    return form ? 'SEC EDGAR' : 'Yahoo Finance'
+  }
+  if (category === 'valuation') return 'Yahoo Finance'
+  if (category === 'volatility') {
+    if (['vix', 'vxn'].includes(lowerMetric)) return 'FRED'
+    if (['beta', 'historical_volatility'].includes(lowerMetric)) return 'Calculated (Yahoo Finance)'
+    return 'Market Average'
+  }
+  if (category === 'macro') {
+    if (lowerMetric === 'gdp_growth') return 'BEA'
+    if (lowerMetric === 'interest_rate') return 'FRED'
+    return 'BLS'
+  }
+  return category
+}
+
+// Infer data type from form and metric
+function inferDataType(form?: string, metric?: string): string {
+  if (form === '10-K') return 'FY'
+  if (form === '10-Q') return 'Q'
+
+  const lowerMetric = (metric || '').toLowerCase()
+  if (['vix', 'vxn'].includes(lowerMetric)) return 'Daily'
+  if (['gdp_growth'].includes(lowerMetric)) return 'Quarterly'
+  if (['interest_rate', 'cpi_inflation', 'unemployment'].includes(lowerMetric)) return 'Monthly'
+  if (lowerMetric === 'beta') return '1Y'
+  if (lowerMetric === 'historical_volatility') return '30D'
+  if (lowerMetric === 'implied_volatility') return 'Forward'
+
+  return 'TTM'
+}
+
 // Format fiscal period label (e.g., "FY 2023" or "Q3 2024")
 function formatFiscalPeriod(form?: string, fiscalYear?: number, endDate?: string): string | null {
   if (!fiscalYear) return null
@@ -59,92 +88,7 @@ function formatFiscalPeriod(form?: string, fiscalYear?: number, endDate?: string
   return `FY ${fiscalYear}`
 }
 
-// MCP row component
-interface MCPRowProps {
-  icon: React.ReactNode
-  label: string
-  color: string
-  children: React.ReactNode
-  status?: 'idle' | 'executing' | 'completed' | 'partial' | 'failed'
-}
-
-function MCPRow({ icon, label, color, children, status }: MCPRowProps) {
-  const hasContent = React.Children.toArray(children).length > 0
-  const isFailed = status === 'failed'
-  const isPartial = status === 'partial'
-
-  // Determine what to show when no content
-  const getEmptyMessage = () => {
-    if (isFailed) return 'API unavailable'
-    if (isPartial) return 'Partial data'
-    return 'No data'
-  }
-
-  return (
-    <div className={`flex items-center gap-2 py-1.5 px-3 border-b border-border last:border-b-0 ${!hasContent && !isFailed ? 'opacity-40' : ''}`}>
-      <div className={`flex items-center gap-2 w-28 shrink-0 ${isFailed ? 'text-red-400' : isPartial ? 'text-amber-400' : color}`}>
-        {icon}
-        <span className="text-xs font-medium">{label}</span>
-      </div>
-      <div className="flex-1 flex items-center gap-4 overflow-x-auto text-xs scrollbar-thin">
-        {hasContent ? children : (
-          <span className={`italic ${isFailed ? 'text-red-400' : isPartial ? 'text-amber-400' : 'text-muted-foreground'}`}>
-            {getEmptyMessage()}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// Data item component with optional fiscal period
-interface DataItemProps {
-  label: string
-  value: string
-  fiscalPeriod?: string | null  // e.g., "FY 2023" or "Q3 2024"
-  endDate?: string              // For tooltip: "2023-09-30"
-}
-
-function DataItem({ label, value, fiscalPeriod, endDate }: DataItemProps) {
-  return (
-    <span className="whitespace-nowrap group relative">
-      <span className="text-muted-foreground">{label}:</span>{' '}
-      <span className="text-foreground font-medium">{value}</span>
-      {fiscalPeriod && (
-        <span className="text-xs text-muted-foreground ml-1">({fiscalPeriod})</span>
-      )}
-      {/* Hover tooltip for full period details */}
-      {endDate && (
-        <span className="hidden group-hover:block absolute bottom-full left-0 mb-1 bg-popover border border-border rounded px-2 py-1 text-xs shadow-lg z-10 whitespace-nowrap">
-          Period ending: {endDate}
-        </span>
-      )}
-    </span>
-  )
-}
-
-// Link item component for news
-interface LinkItemProps {
-  title: string
-  url: string
-}
-
-function LinkItem({ title, url }: LinkItemProps) {
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 hover:underline whitespace-nowrap max-w-[250px]"
-      title={title}
-    >
-      <span className="truncate">{title}</span>
-      <ExternalLink className="h-3 w-3 shrink-0" />
-    </a>
-  )
-}
-
-export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker, exchange, cik }: MCPDataPanelProps) {
+export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, cik }: MCPDataPanelProps) {
   // Group metrics by source, including temporal data
   const groupedMetrics = React.useMemo(() => {
     const groups: Record<string, Array<{
@@ -152,6 +96,7 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
       value: string | number
       fiscalPeriod?: string | null
       endDate?: string
+      form?: string
     }>> = {
       fundamentals: [],
       valuation: [],
@@ -170,7 +115,8 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
           metric: m.metric,
           value: m.value,
           fiscalPeriod,
-          endDate: m.end_date
+          endDate: m.end_date,
+          form: m.form
         })
       }
     }
@@ -178,9 +124,43 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
     return groups
   }, [metrics])
 
+  // Build quantitative rows for table display
+  const quantitativeRows = React.useMemo(() => {
+    const categories = ['fundamentals', 'valuation', 'volatility', 'macro']
+    const rows: Array<{
+      metric: string
+      value: string
+      dataType: string
+      asOf: string
+      source: string
+      category: string
+    }> = []
+
+    for (const cat of categories) {
+      for (const m of groupedMetrics[cat] || []) {
+        rows.push({
+          metric: m.metric,
+          value: formatValue(m.value),
+          dataType: inferDataType(m.form, m.metric),
+          asOf: m.endDate || '-',
+          source: inferDataSource(cat, m.metric, m.form),
+          category: cat.charAt(0).toUpperCase() + cat.slice(1)
+        })
+      }
+    }
+    return rows
+  }, [groupedMetrics])
+
   // Extract news articles from raw_data if available
   const newsArticles = React.useMemo(() => {
     if (!rawData) return []
+
+    const articles: Array<{
+      title: string
+      url: string
+      date?: string
+      source?: string
+    }> = []
 
     // Navigate to metrics.news - the actual structure from API
     const metricsObj = rawData.metrics as Record<string, unknown> | undefined
@@ -190,24 +170,43 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
       // Get results array (from Tavily/NYT/NewsAPI)
       const results = newsData.results as Array<Record<string, unknown>> | undefined
       if (results && Array.isArray(results) && results.length > 0) {
-        return results.slice(0, 5).map((a) => ({
-          title: String(a.title || a.content || 'News article'),
-          url: String(a.url || a.link || '#')
-        }))
+        for (const a of results) {
+          articles.push({
+            title: String(a.title || a.content || 'News article'),
+            url: String(a.url || a.link || '#'),
+            date: a.published_date ? String(a.published_date) : undefined,
+            source: a.source ? String(a.source) : 'Tavily'
+          })
+        }
       }
     }
 
     // Fallback: check rawData.news directly
-    if (rawData.news && Array.isArray(rawData.news)) {
-      return rawData.news.slice(0, 5)
+    if (articles.length === 0 && rawData.news && Array.isArray(rawData.news)) {
+      for (const a of rawData.news.slice(0, 10)) {
+        articles.push({
+          title: a.title || 'News article',
+          url: a.url || '#',
+          date: a.published_date,
+          source: a.source || 'Tavily'
+        })
+      }
     }
 
-    return []
+    return articles
   }, [rawData])
 
-  // Extract sentiment sources with links from raw_data
-  const sentimentSources = React.useMemo(() => {
+  // Extract sentiment items (individual news/posts from Finnhub and Reddit)
+  const sentimentItems = React.useMemo(() => {
     if (!rawData) return []
+
+    const items: Array<{
+      title: string
+      url: string
+      date?: string
+      source: string
+      subreddit?: string
+    }> = []
 
     // Navigate to metrics.sentiment
     const metricsObj = rawData.metrics as Record<string, unknown> | undefined
@@ -215,39 +214,81 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
 
     if (!sentimentData) return []
 
-    const sources: Array<{name: string, score: number | null, url?: string}> = []
     const sentMetrics = sentimentData.metrics as Record<string, unknown> | undefined
 
-    // Finnhub sentiment
+    // Finnhub news items
     if (sentMetrics?.finnhub) {
       const finnhub = sentMetrics.finnhub as Record<string, unknown>
-      const score = finnhub.score ?? finnhub.sentiment_score
-      sources.push({
-        name: 'Finnhub',
-        score: typeof score === 'number' ? score : null,
-        url: 'https://finnhub.io'
-      })
+      const news = finnhub.news as Array<Record<string, unknown>> | undefined
+      if (news && Array.isArray(news)) {
+        for (const n of news) {
+          items.push({
+            title: String(n.headline || n.title || 'Finnhub article'),
+            url: String(n.url || '#'),
+            date: n.datetime ? String(n.datetime) : undefined,
+            source: 'Finnhub'
+          })
+        }
+      }
     }
 
-    // Reddit sentiment
+    // Reddit posts
     if (sentMetrics?.reddit) {
       const reddit = sentMetrics.reddit as Record<string, unknown>
-      const score = reddit.score
-      sources.push({
-        name: 'Reddit',
-        score: typeof score === 'number' ? score : null,
-        url: 'https://reddit.com'
+      const posts = reddit.posts as Array<Record<string, unknown>> | undefined
+      if (posts && Array.isArray(posts)) {
+        for (const p of posts) {
+          items.push({
+            title: String(p.title || 'Reddit post'),
+            url: String(p.url || p.permalink || '#'),
+            date: p.created_utc ? new Date(Number(p.created_utc) * 1000).toISOString().split('T')[0] : undefined,
+            source: 'Reddit',
+            subreddit: p.subreddit ? String(p.subreddit) : undefined
+          })
+        }
+      }
+    }
+
+    return items
+  }, [rawData])
+
+  // Build qualitative rows for table display (news + sentiment)
+  const qualitativeRows = React.useMemo(() => {
+    const rows: Array<{
+      title: string
+      date: string
+      source: string
+      subreddit: string
+      url: string
+      category: string
+    }> = []
+
+    // News articles
+    for (const article of newsArticles) {
+      rows.push({
+        title: article.title,
+        date: article.date || '-',
+        source: article.source || 'Tavily',
+        subreddit: '-',
+        url: article.url,
+        category: 'News'
       })
     }
 
-    // Composite score as fallback
-    const composite = sentimentData.composite_score
-    if (typeof composite === 'number' && sources.length === 0) {
-      sources.push({ name: 'Composite', score: composite })
+    // Sentiment items
+    for (const item of sentimentItems) {
+      rows.push({
+        title: item.title,
+        date: item.date || '-',
+        source: item.source,
+        subreddit: item.subreddit ? `r/${item.subreddit}` : '-',
+        url: item.url,
+        category: 'Sentiment'
+      })
     }
 
-    return sources
-  }, [rawData])
+    return rows
+  }, [newsArticles, sentimentItems])
 
   // Extract company profile info from raw_data if available
   const companyProfile = React.useMemo(() => {
@@ -270,15 +311,6 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
   if (!hasAnyData) {
     return null
   }
-
-  // Data sources with expanded names
-  const dataSources = [
-    { abbr: 'SEC', full: 'Securities and Exchange Commission (SEC) EDGAR' },
-    { abbr: 'FRED', full: 'Federal Reserve Economic Data (FRED)' },
-    { abbr: 'Yahoo', full: 'Yahoo Finance' },
-    { abbr: 'Tavily', full: 'Tavily News API' },
-    { abbr: 'Finnhub', full: 'Finnhub Market Data' },
-  ]
 
   return (
     <div className="space-y-4">
@@ -325,163 +357,89 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
         </div>
       )}
 
-      {/* Key Data */}
-      <div className="bg-card rounded-lg border border-border overflow-hidden">
-        <div className="px-3 py-2 bg-muted/50 border-b border-border">
-          <h3 className="text-sm font-medium text-foreground">Key Data</h3>
-        </div>
-
-        <div className="divide-y divide-border">
-        {/* Fundamentals - with fiscal period labels */}
-        <MCPRow
-          icon={<DollarSign className="h-4 w-4" />}
-          label="Fundamentals"
-          color="text-emerald-500"
-          status={mcpStatus?.fundamentals}
-        >
-          {groupedMetrics.fundamentals.map((m, i) => (
-            <DataItem
-              key={i}
-              label={m.metric}
-              value={formatValue(m.value)}
-              fiscalPeriod={m.fiscalPeriod}
-              endDate={m.endDate}
-            />
-          ))}
-        </MCPRow>
-
-        {/* Valuation */}
-        <MCPRow
-          icon={<TrendingUp className="h-4 w-4" />}
-          label="Valuation"
-          color="text-blue-500"
-          status={mcpStatus?.valuation}
-        >
-          {groupedMetrics.valuation.map((m, i) => (
-            <DataItem
-              key={i}
-              label={m.metric}
-              value={formatValue(m.value)}
-              fiscalPeriod={m.fiscalPeriod}
-              endDate={m.endDate}
-            />
-          ))}
-        </MCPRow>
-
-        {/* Volatility */}
-        <MCPRow
-          icon={<Activity className="h-4 w-4" />}
-          label="Volatility"
-          color="text-yellow-500"
-          status={mcpStatus?.volatility}
-        >
-          {groupedMetrics.volatility.map((m, i) => (
-            <DataItem
-              key={i}
-              label={m.metric}
-              value={formatValue(m.value)}
-              fiscalPeriod={m.fiscalPeriod}
-              endDate={m.endDate}
-            />
-          ))}
-        </MCPRow>
-
-        {/* Macro (US) */}
-        <MCPRow
-          icon={<Globe className="h-4 w-4" />}
-          label="Macro (US)"
-          color="text-purple-500"
-          status={mcpStatus?.macro}
-        >
-          {groupedMetrics.macro.map((m, i) => (
-            <DataItem
-              key={i}
-              label={m.metric}
-              value={formatValue(m.value)}
-              fiscalPeriod={m.fiscalPeriod}
-              endDate={m.endDate}
-            />
-          ))}
-        </MCPRow>
-
-        {/* News */}
-        <MCPRow
-          icon={<Newspaper className="h-4 w-4" />}
-          label="News"
-          color="text-orange-500"
-          status={mcpStatus?.news}
-        >
-          {newsArticles.length > 0 ? (
-            newsArticles.map((article, i) => (
-              <LinkItem key={i} title={article.title} url={article.url} />
-            ))
-          ) : groupedMetrics.news.length > 0 ? (
-            groupedMetrics.news.map((m, i) => (
-              <DataItem key={i} label={m.metric} value={formatValue(m.value)} />
-            ))
-          ) : null}
-        </MCPRow>
-
-        {/* Sentiment */}
-        <MCPRow
-          icon={<MessageSquare className="h-4 w-4" />}
-          label="Sentiment"
-          color="text-pink-500"
-          status={mcpStatus?.sentiment}
-        >
-          {sentimentSources.length > 0 ? (
-            sentimentSources.map((s, i) => (
-              <span key={i} className="whitespace-nowrap">
-                {s.url ? (
-                  <a
-                    href={s.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-pink-400 hover:text-pink-300 hover:underline"
-                  >
-                    {s.name}
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">{s.name}</span>
-                )}
-                {s.score !== null && (
-                  <span className="text-foreground font-medium ml-1">
-                    {s.score.toFixed(1)}
-                  </span>
-                )}
-              </span>
-            ))
-          ) : groupedMetrics.sentiment.length > 0 ? (
-            groupedMetrics.sentiment.map((m, i) => (
-              <DataItem
-                key={i}
-                label={m.metric}
-                value={formatValue(m.value)}
-                fiscalPeriod={m.fiscalPeriod}
-                endDate={m.endDate}
-              />
-            ))
-          ) : null}
-        </MCPRow>
-        </div>
-      </div>
-
-      {/* Data Sources */}
-      <div className="bg-card rounded-lg border border-border overflow-hidden">
-        <div className="px-3 py-2 bg-muted/50 border-b border-border">
-          <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-            <Database className="h-4 w-4" />
-            Data Sources
-          </h3>
-        </div>
-        <div className="p-3">
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            {dataSources.map((source, i) => (
-              <span key={i} title={source.full}>{source.abbr}</span>
-            ))}
+      {/* Quantitative Data Table */}
+      {quantitativeRows.length > 0 && (
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
+          <div className="px-3 py-2 bg-muted/50 border-b border-border">
+            <h3 className="text-sm font-medium text-foreground">Quantitative Data</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">S/N</th>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Metric</th>
+                  <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">Value</th>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Data Type</th>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">As Of</th>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Source</th>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Category</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {quantitativeRows.map((row, idx) => (
+                  <tr key={idx} className="hover:bg-muted/20">
+                    <td className="px-2 py-1.5 text-muted-foreground">{idx + 1}</td>
+                    <td className="px-2 py-1.5">{row.metric}</td>
+                    <td className="px-2 py-1.5 text-right font-medium">{row.value}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground">{row.dataType}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground">{row.asOf}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground">{row.source}</td>
+                    <td className="px-2 py-1.5">{row.category}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Qualitative Data Table */}
+      {qualitativeRows.length > 0 && (
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
+          <div className="px-3 py-2 bg-muted/50 border-b border-border">
+            <h3 className="text-sm font-medium text-foreground">Qualitative Data</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">S/N</th>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Title</th>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Date</th>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Source</th>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Subreddit</th>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">URL</th>
+                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Category</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {qualitativeRows.map((row, idx) => (
+                  <tr key={idx} className="hover:bg-muted/20">
+                    <td className="px-2 py-1.5 text-muted-foreground">{idx + 1}</td>
+                    <td className="px-2 py-1.5 max-w-[250px] truncate" title={row.title}>{row.title}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground">{row.date}</td>
+                    <td className="px-2 py-1.5">{row.source}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground">{row.subreddit}</td>
+                    <td className="px-2 py-1.5">
+                      <a
+                        href={row.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 hover:underline inline-flex items-center gap-1"
+                      >
+                        Link
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </td>
+                    <td className="px-2 py-1.5">{row.category}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
