@@ -10,6 +10,8 @@ class AnalysisRequest(BaseModel):
     name: str
     ticker: str = ""
     strategy_focus: str = "Competitive Position"
+    skip_cache: bool = False  # If True, ignore cache and run fresh analysis
+    user_api_keys: dict = {}  # Optional: {"groq": "key", "gemini": "key", "openrouter": "key"}
 
 
 class StockSearchResult(BaseModel):

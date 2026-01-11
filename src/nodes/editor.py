@@ -42,7 +42,9 @@ def editor_node(state, workflow_id=None, progress_store=None):
     # Log revision start
     _add_activity_log(workflow_id, progress_store, "editor", f"Revision #{current_revision} in progress...")
 
-    llm = get_llm_client()
+    # Use user-provided API keys if available
+    user_keys = state.get("user_api_keys", {})
+    llm = get_llm_client(user_keys) if user_keys else get_llm_client()
     strategy_name = state.get("strategy_focus", "Cost Leadership")
 
     # Get source data for grounding - editor must use ONLY this data
@@ -53,7 +55,7 @@ def editor_node(state, workflow_id=None, progress_store=None):
 
     # Prepare the revision prompt with source data for grounding
     prompt = f"""
-You are revising a SWOT analysis based on critique feedback.
+You are revising a SWOT analysis based on critique feedback. Keep it CONCISE.
 
 CRITICAL GROUNDING RULES:
 1. You may ONLY use facts and numbers from the SOURCE DATA provided below.
@@ -79,8 +81,11 @@ REVISION INSTRUCTIONS:
 4. Make sure strengths/opportunities are positive, weaknesses/threats are negative
 5. Align analysis with {strategy_name} strategic focus
 6. If data is missing for a point, remove that point rather than inventing data
+7. Keep each bullet point under 25 words - single sentence only
+8. Maximum 5 bullet points per category
+9. Remove any verbose explanations or context paragraphs
 
-Return only the improved SWOT analysis. Do NOT include any facts not found in the SOURCE DATA.
+Return only the improved SWOT analysis. Keep it brief and impactful.
 """
 
     # Get the revised draft from LLM

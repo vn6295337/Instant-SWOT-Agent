@@ -53,7 +53,8 @@ async def start_analysis(request: AnalysisRequest):
     # Start workflow in background thread
     thread = threading.Thread(
         target=run_workflow_background,
-        args=(workflow_id, request.name, request.ticker, request.strategy_focus),
+        args=(workflow_id, request.name, request.ticker, request.strategy_focus,
+              request.skip_cache, request.user_api_keys),
         daemon=True
     )
     thread.start()

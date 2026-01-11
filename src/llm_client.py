@@ -11,30 +11,40 @@ from typing import Optional, Tuple
 class LLMClient:
     """LLM client with automatic provider fallback."""
 
-    def __init__(self):
-        """Initialize client with available providers based on API keys."""
-        self.providers = []
+    def __init__(self, override_keys: dict = None):
+        """Initialize client with available providers based on API keys.
 
-        # Build providers list dynamically based on available API keys
-        if os.getenv("GROQ_API_KEY"):
+        Args:
+            override_keys: Optional dict with user-provided API keys.
+                          Keys: "groq", "gemini", "openrouter"
+        """
+        self.providers = []
+        override_keys = override_keys or {}
+
+        # Build providers list - use override keys if provided, else env vars
+        groq_key = override_keys.get("groq") or os.getenv("GROQ_API_KEY")
+        gemini_key = override_keys.get("gemini") or os.getenv("GEMINI_API_KEY")
+        openrouter_key = override_keys.get("openrouter") or os.getenv("OPENROUTER_API_KEY")
+
+        if groq_key:
             self.providers.append({
                 "name": "groq",
-                "key": os.getenv("GROQ_API_KEY"),
+                "key": groq_key,
                 "model": os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
                 "url": "https://api.groq.com/openai/v1/chat/completions"
             })
 
-        if os.getenv("GEMINI_API_KEY"):
+        if gemini_key:
             self.providers.append({
                 "name": "gemini",
-                "key": os.getenv("GEMINI_API_KEY"),
+                "key": gemini_key,
                 "model": os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
             })
 
-        if os.getenv("OPENROUTER_API_KEY"):
+        if openrouter_key:
             self.providers.append({
                 "name": "openrouter",
-                "key": os.getenv("OPENROUTER_API_KEY"),
+                "key": openrouter_key,
                 "model": os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free"),
                 "url": "https://openrouter.ai/api/v1/chat/completions"
             })
@@ -142,11 +152,21 @@ class LLMClient:
         return None, f"Unknown provider: {provider['name']}"
 
 
-# Singleton instance
+# Singleton instance for default (env-based) client
 _client = None
 
-def get_llm_client() -> LLMClient:
-    """Get or create the singleton LLM client instance."""
+def get_llm_client(override_keys: dict = None) -> LLMClient:
+    """Get or create an LLM client instance.
+
+    Args:
+        override_keys: If provided, creates a new client with these keys.
+                      If None/empty, returns the singleton instance.
+    """
+    # If user provided override keys, create a fresh client for this request
+    if override_keys:
+        return LLMClient(override_keys)
+
+    # Otherwise use singleton for default env-based keys
     global _client
     if _client is None:
         _client = LLMClient()

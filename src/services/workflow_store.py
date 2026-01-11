@@ -97,14 +97,20 @@ def update_mcp_status(workflow_id: str, source: str, status: str):
             WORKFLOWS[workflow_id]["mcp_status"][source] = status
 
 
-def run_workflow_background(workflow_id: str, company_name: str, ticker: str, strategy_focus: str):
+def run_workflow_background(workflow_id: str, company_name: str, ticker: str, strategy_focus: str,
+                            skip_cache: bool = False, user_api_keys: dict = None):
     """Execute workflow in background thread with progress tracking."""
     try:
-        # Check cache first
+        # Check cache first (unless skip_cache is True)
         add_activity_log(workflow_id, "cache", f"Checking cache for {ticker}")
         WORKFLOWS[workflow_id]["current_step"] = "cache"
 
-        cached = get_cached_analysis(ticker)
+        if skip_cache:
+            add_activity_log(workflow_id, "cache", f"Cache skipped - running fresh analysis")
+            cached = None
+        else:
+            cached = get_cached_analysis(ticker)
+
         if cached:
             # Cache hit - use cached result
             add_activity_log(workflow_id, "cache", f"Cache HIT - {ticker} analysis found in history")
@@ -166,7 +172,8 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
             "data_source": "live",
             "provider_used": None,
             "workflow_id": workflow_id,
-            "progress_store": WORKFLOWS
+            "progress_store": WORKFLOWS,
+            "user_api_keys": user_api_keys or {}  # Pass user API keys to nodes
         }
 
         # Execute workflow

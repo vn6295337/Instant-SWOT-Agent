@@ -182,22 +182,24 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
   const newsArticles = React.useMemo(() => {
     if (!rawData) return []
 
-    // Try to get articles from metrics.news (field name is "results" from Tavily API)
-    const newsData = rawData.metrics?.news || rawData.news
-    if (newsData && typeof newsData === 'object') {
-      // Check "results" first (Tavily API format), then "articles" as fallback
-      const articles = (newsData as Record<string, unknown>).results || (newsData as Record<string, unknown>).articles
-      if (Array.isArray(articles)) {
-        return articles.slice(0, 4).map((a: Record<string, unknown>) => ({
-          title: a.title as string || a.content as string || 'News article',
-          url: a.url as string || a.link as string || '#'
+    // Navigate to metrics.news - the actual structure from API
+    const metricsObj = rawData.metrics as Record<string, unknown> | undefined
+    const newsData = metricsObj?.news as Record<string, unknown> | undefined
+
+    if (newsData) {
+      // Get results array (from Tavily/NYT/NewsAPI)
+      const results = newsData.results as Array<Record<string, unknown>> | undefined
+      if (results && Array.isArray(results) && results.length > 0) {
+        return results.slice(0, 5).map((a) => ({
+          title: String(a.title || a.content || 'News article'),
+          url: String(a.url || a.link || '#')
         }))
       }
     }
 
-    // Fallback: check if news is an array directly
-    if (Array.isArray(rawData.news)) {
-      return rawData.news.slice(0, 4)
+    // Fallback: check rawData.news directly
+    if (rawData.news && Array.isArray(rawData.news)) {
+      return rawData.news.slice(0, 5)
     }
 
     return []
@@ -207,35 +209,40 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
   const sentimentSources = React.useMemo(() => {
     if (!rawData) return []
 
-    const sentimentData = rawData.metrics?.sentiment || rawData.sentiment
-    if (!sentimentData || typeof sentimentData !== 'object') return []
+    // Navigate to metrics.sentiment
+    const metricsObj = rawData.metrics as Record<string, unknown> | undefined
+    const sentimentData = metricsObj?.sentiment as Record<string, unknown> | undefined
+
+    if (!sentimentData) return []
 
     const sources: Array<{name: string, score: number | null, url?: string}> = []
-    const metrics = (sentimentData as Record<string, unknown>).metrics as Record<string, unknown> | undefined
+    const sentMetrics = sentimentData.metrics as Record<string, unknown> | undefined
 
     // Finnhub sentiment
-    if (metrics?.finnhub) {
-      const finnhub = metrics.finnhub as Record<string, unknown>
+    if (sentMetrics?.finnhub) {
+      const finnhub = sentMetrics.finnhub as Record<string, unknown>
+      const score = finnhub.score ?? finnhub.sentiment_score
       sources.push({
         name: 'Finnhub',
-        score: finnhub.score as number || finnhub.sentiment_score as number || null,
+        score: typeof score === 'number' ? score : null,
         url: 'https://finnhub.io'
       })
     }
 
     // Reddit sentiment
-    if (metrics?.reddit) {
-      const reddit = metrics.reddit as Record<string, unknown>
+    if (sentMetrics?.reddit) {
+      const reddit = sentMetrics.reddit as Record<string, unknown>
+      const score = reddit.score
       sources.push({
         name: 'Reddit',
-        score: reddit.score as number || null,
+        score: typeof score === 'number' ? score : null,
         url: 'https://reddit.com'
       })
     }
 
-    // Composite score
-    const composite = (sentimentData as Record<string, unknown>).composite_score as number | undefined
-    if (composite !== undefined && sources.length === 0) {
+    // Composite score as fallback
+    const composite = sentimentData.composite_score
+    if (typeof composite === 'number' && sources.length === 0) {
       sources.push({ name: 'Composite', score: composite })
     }
 

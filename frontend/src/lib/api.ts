@@ -1,8 +1,8 @@
 import { AnalysisResponse } from './types'
 
 // In production (HF Spaces), API is served from same origin - use empty string
-// In development, use localhost:8002
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:8002')
+// In development, use localhost:8000 (8002 is used by financials cluster)
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:8000')
 
 // Stock search types
 export interface StockResult {
@@ -83,11 +83,20 @@ export async function searchStocks(query: string): Promise<StockSearchResponse> 
   return response.json()
 }
 
+// User API keys for LLM providers
+export interface UserApiKeys {
+  groq?: string
+  gemini?: string
+  openrouter?: string
+}
+
 // Start analysis with ticker support
 export async function startAnalysis(
   companyName: string,
   ticker: string = '',
-  strategyFocus: string = 'Competitive Position'
+  strategyFocus: string = 'Competitive Position',
+  skipCache: boolean = false,
+  userApiKeys: UserApiKeys = {}
 ): Promise<WorkflowStartResponse> {
   const response = await fetch(`${API_BASE_URL}/analyze`, {
     method: 'POST',
@@ -97,7 +106,9 @@ export async function startAnalysis(
     body: JSON.stringify({
       name: companyName,
       ticker: ticker,
-      strategy_focus: strategyFocus
+      strategy_focus: strategyFocus,
+      skip_cache: skipCache,
+      user_api_keys: userApiKeys
     }),
   })
 
