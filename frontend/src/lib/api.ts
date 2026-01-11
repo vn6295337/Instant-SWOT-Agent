@@ -27,7 +27,7 @@ export interface ActivityLogEntry {
 // Granular metric entry with optional temporal data
 export interface MetricEntry {
   timestamp: string
-  source: string   // "volatility", "valuation", "financials", etc.
+  source: string   // "volatility", "valuation", "fundamentals", etc.
   metric: string   // "beta", "P/E", "revenue", etc.
   value: string | number
   // Temporal fields (from SEC EDGAR data)
@@ -38,7 +38,7 @@ export interface MetricEntry {
 
 // MCP status for each server (partial = some data but with errors)
 export interface MCPStatus {
-  financials: 'idle' | 'executing' | 'completed' | 'partial' | 'failed'
+  fundamentals: 'idle' | 'executing' | 'completed' | 'partial' | 'failed'
   valuation: 'idle' | 'executing' | 'completed' | 'partial' | 'failed'
   volatility: 'idle' | 'executing' | 'completed' | 'partial' | 'failed'
   macro: 'idle' | 'executing' | 'completed' | 'partial' | 'failed'

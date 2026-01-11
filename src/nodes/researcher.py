@@ -48,7 +48,7 @@ def researcher_node(state, workflow_id=None, progress_store=None):
     Research Gateway node that fetches data via A2A protocol.
 
     Calls the external Research Service which internally fetches from 6 MCP servers:
-    Financials, Volatility, Macro, Valuation, News, Sentiment
+    Fundamentals, Volatility, Macro, Valuation, News, Sentiment
     """
     company = state["company_name"]
     ticker = state.get("ticker")  # Use ticker from stock search if available
@@ -119,9 +119,9 @@ def researcher_node(state, workflow_id=None, progress_store=None):
         # Note: Metrics are streamed via partial_metrics during A2A polling
 
         # Check MCP source availability with tiered logic
-        # Core sources (need at least 2 of 3): financials, valuation, volatility
+        # Core sources (need at least 2 of 3): fundamentals, valuation, volatility
         # Supplementary sources (non-blocking): macro, news, sentiment
-        CORE_SOURCES = {"financials", "valuation", "volatility"}
+        CORE_SOURCES = {"fundamentals", "valuation", "volatility"}
         SUPPLEMENTARY_SOURCES = {"macro", "news", "sentiment"}
 
         sources_available = set(result.get("sources_available", []))
@@ -142,7 +142,7 @@ def researcher_node(state, workflow_id=None, progress_store=None):
         # Abort if 2+ core sources failed (need at least 2 of 3)
         if len(core_available) < 2:
             failed_list = ", ".join(sorted(core_failed))
-            raise RuntimeError(f"Insufficient core data: {failed_list} unavailable. Need at least 2 of: Financials, Valuation, Volatility.")
+            raise RuntimeError(f"Insufficient core data: {failed_list} unavailable. Need at least 2 of: Fundamentals, Valuation, Volatility.")
 
         if sources_available:
             state["raw_data"] = json.dumps(result, indent=2, default=str)

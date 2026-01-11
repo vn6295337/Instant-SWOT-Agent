@@ -36,7 +36,7 @@ async def start_analysis(request: AnalysisRequest):
         "activity_log": [],
         "metrics": [],
         "mcp_status": {
-            "financials": "idle",
+            "fundamentals": "idle",
             "valuation": "idle",
             "volatility": "idle",
             "macro": "idle",

@@ -78,7 +78,7 @@ const NODES = {
 const MCP_START_X = NODES.researcher.x + NODE_SIZE / 2 + 40
 const MCP_GAP = 38
 const MCP_SERVERS = [
-  { id: 'financials', label: 'Financials', icon: DollarSign, x: MCP_START_X },
+  { id: 'fundamentals', label: 'Fundamentals', icon: DollarSign, x: MCP_START_X },
   { id: 'valuation', label: 'Valuation', icon: TrendingUp, x: MCP_START_X + MCP_GAP },
   { id: 'volatility', label: 'Volatility', icon: Activity, x: MCP_START_X + MCP_GAP * 2 },
   { id: 'macro', label: 'Macro (US)', icon: Globe, x: MCP_START_X + MCP_GAP * 3 },

@@ -153,7 +153,7 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
       fiscalPeriod?: string | null
       endDate?: string
     }>> = {
-      financials: [],
+      fundamentals: [],
       valuation: [],
       volatility: [],
       macro: [],
@@ -332,14 +332,14 @@ export function MCPDataPanel({ metrics, rawData, mcpStatus, companyName, ticker,
         </div>
 
         <div className="divide-y divide-border">
-        {/* Financials - with fiscal period labels */}
+        {/* Fundamentals - with fiscal period labels */}
         <MCPRow
           icon={<DollarSign className="h-4 w-4" />}
-          label="Financials"
+          label="Fundamentals"
           color="text-emerald-500"
-          status={mcpStatus?.financials}
+          status={mcpStatus?.fundamentals}
         >
-          {groupedMetrics.financials.map((m, i) => (
+          {groupedMetrics.fundamentals.map((m, i) => (
             <DataItem
               key={i}
               label={m.metric}

@@ -46,8 +46,8 @@ export interface MCPRawData {
     fullTimeEmployees?: number
     employees?: number
   }
-  // Financials MCP (with temporal data for SEC EDGAR metrics)
-  financials?: {
+  // Fundamentals MCP (with temporal data for SEC EDGAR metrics)
+  fundamentals?: {
     revenue?: TemporalMetric | number
     gross_margin?: number
     operating_margin?: number

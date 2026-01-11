@@ -98,7 +98,7 @@ def check_data_sources(report: str, sources_available: list) -> dict:
     report_lower = report.lower()
 
     source_keywords = {
-        "financials": ["revenue", "net margin", "debt", "cash flow", "eps", "earnings"],
+        "fundamentals": ["revenue", "net margin", "debt", "cash flow", "eps", "earnings"],
         "volatility": ["beta", "volatility", "vix", "price swing"],
         "macro": ["gdp", "interest rate", "inflation", "unemployment", "fed"],
         "valuation": ["p/e", "p/s", "p/b", "ev/ebitda", "peg", "valuation", "market cap"],
@@ -332,7 +332,7 @@ def critic_node(state, workflow_id=None, progress_store=None):
         raw_data = json.loads(state.get("raw_data", "{}"))
         sources_available = raw_data.get("sources_available", [])
     except:
-        sources_available = ["financials", "volatility", "macro", "valuation", "news", "sentiment"]
+        sources_available = ["fundamentals", "volatility", "macro", "valuation", "news", "sentiment"]
 
     # Run deterministic checks
     print("Running deterministic checks...")

@@ -39,7 +39,7 @@ def add_metric(workflow_id: str, source: str, metric: str, value,
 
     Args:
         workflow_id: Workflow identifier
-        source: Data source (e.g., 'financials', 'valuation')
+        source: Data source (e.g., 'fundamentals', 'valuation')
         metric: Metric name (e.g., 'Revenue', 'P/E')
         value: Metric value
         end_date: Fiscal period end date (e.g., '2023-09-30')
@@ -150,7 +150,7 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
 
         # Initialize MCP status
         WORKFLOWS[workflow_id]["mcp_status"] = {
-            "financials": "idle",
+            "fundamentals": "idle",
             "valuation": "idle",
             "volatility": "idle",
             "macro": "idle",

@@ -73,7 +73,7 @@ const App = () => (
 export default App
 
 const defaultMCPStatus: MCPStatus = {
-  financials: 'idle',
+  fundamentals: 'idle',
   valuation: 'idle',
   volatility: 'idle',
   macro: 'idle',
@@ -146,7 +146,7 @@ const Index = () => {
         setMcpStatus(prev => {
           const newStatus = status.mcp_status || defaultMCPStatus
           return {
-            financials: prev.financials === 'failed' || prev.financials === 'partial' ? prev.financials : newStatus.financials,
+            fundamentals: prev.fundamentals === 'failed' || prev.fundamentals === 'partial' ? prev.fundamentals : newStatus.fundamentals,
             valuation: prev.valuation === 'failed' || prev.valuation === 'partial' ? prev.valuation : newStatus.valuation,
             volatility: prev.volatility === 'failed' || prev.volatility === 'partial' ? prev.volatility : newStatus.volatility,
             macro: prev.macro === 'failed' || prev.macro === 'partial' ? prev.macro : newStatus.macro,
