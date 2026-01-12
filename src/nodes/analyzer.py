@@ -3,6 +3,62 @@ from langsmith import traceable
 import time
 import json
 
+# VADER Sentiment Analysis
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+_vader_analyzer = None
+
+
+def _get_vader():
+    """Lazy-load VADER analyzer (singleton)."""
+    global _vader_analyzer
+    if _vader_analyzer is None:
+        _vader_analyzer = SentimentIntensityAnalyzer()
+    return _vader_analyzer
+
+
+def _compute_vader_sentiment(texts: list) -> dict:
+    """
+    Compute VADER sentiment scores for a list of texts.
+
+    Args:
+        texts: List of strings (headlines, titles, etc.)
+
+    Returns:
+        {
+            "avg_compound": 0.42,
+            "min_compound": -0.31,
+            "max_compound": 0.78,
+            "positive_count": 3,
+            "negative_count": 1,
+            "neutral_count": 1,
+            "total_count": 5
+        }
+        or None if no texts provided
+    """
+    if not texts:
+        return None
+
+    vader = _get_vader()
+    scores = []
+    for text in texts:
+        if text and isinstance(text, str):
+            score = vader.polarity_scores(text)["compound"]
+            scores.append(score)
+
+    if not scores:
+        return None
+
+    return {
+        "avg_compound": round(sum(scores) / len(scores), 3),
+        "min_compound": round(min(scores), 3),
+        "max_compound": round(max(scores), 3),
+        "positive_count": sum(1 for s in scores if s > 0.05),
+        "negative_count": sum(1 for s in scores if s < -0.05),
+        "neutral_count": sum(1 for s in scores if -0.05 <= s <= 0.05),
+        "total_count": len(scores)
+    }
+
 
 # Financial institution detection for EV/EBITDA exclusion
 FINANCIAL_SECTORS = {
@@ -571,21 +627,35 @@ def _extract_key_metrics(raw_data: str) -> dict:
             "unemployment": macro_metrics.get("unemployment", {}).get("value"),
         }
 
-    # Extract news
+    # Extract news with VADER sentiment
     news = metrics.get("news", {})
     if news and "error" not in news:
         articles = news.get("articles", [])
+        headlines = [a.get("title", "") for a in articles if a.get("title")]
+
+        # Compute VADER sentiment on headlines
+        vader_news = _compute_vader_sentiment(headlines)
+
         extracted["news"] = {
             "article_count": len(articles),
             "headlines": [a.get("title", "")[:100] for a in articles[:5]],
+            "vader_sentiment": vader_news,
         }
 
-    # Extract sentiment
+    # Extract sentiment with VADER on reddit posts
     sent = metrics.get("sentiment", {})
     if sent and "error" not in sent:
+        # Get reddit posts for VADER analysis
+        reddit_posts = sent.get("reddit_posts", [])
+        reddit_titles = [p.get("title", "") for p in reddit_posts if p.get("title")]
+
+        # Compute VADER sentiment on reddit titles
+        vader_reddit = _compute_vader_sentiment(reddit_titles)
+
         extracted["sentiment"] = {
             "composite_score": sent.get("composite_score"),
             "overall_category": sent.get("overall_swot_category"),
+            "vader_reddit": vader_reddit,
         }
 
     return extracted
@@ -700,16 +770,21 @@ def _format_metrics_for_prompt(extracted: dict, is_financial: bool = False) -> s
             lines.append(f"- Unemployment: {macro['unemployment']:.1f}%")
         lines.append("")
 
-    # News
+    # News with VADER sentiment
     news = extracted.get("news", {})
     if news:
         lines.append("=== RECENT NEWS ===")
         lines.append(f"- Articles found: {news.get('article_count', 0)}")
+        # VADER sentiment scores for news
+        vader_news = news.get("vader_sentiment")
+        if vader_news:
+            lines.append(f"- VADER Sentiment: {vader_news['avg_compound']:.2f} (range: {vader_news['min_compound']:.2f} to {vader_news['max_compound']:.2f})")
+            lines.append(f"  Breakdown: {vader_news['positive_count']} positive, {vader_news['negative_count']} negative, {vader_news['neutral_count']} neutral")
         for headline in news.get("headlines", []):
             lines.append(f"  • {headline}")
         lines.append("")
 
-    # Sentiment
+    # Sentiment with VADER for reddit
     sent = extracted.get("sentiment", {})
     if sent:
         lines.append("=== MARKET SENTIMENT ===")
@@ -717,6 +792,11 @@ def _format_metrics_for_prompt(extracted: dict, is_financial: bool = False) -> s
             lines.append(f"- Composite Score: {sent['composite_score']:.2f}")
         if sent.get("overall_category"):
             lines.append(f"- Overall: {sent['overall_category']}")
+        # VADER sentiment scores for reddit
+        vader_reddit = sent.get("vader_reddit")
+        if vader_reddit:
+            lines.append(f"- Reddit VADER: {vader_reddit['avg_compound']:.2f} (range: {vader_reddit['min_compound']:.2f} to {vader_reddit['max_compound']:.2f})")
+            lines.append(f"  Breakdown: {vader_reddit['positive_count']} positive, {vader_reddit['negative_count']} negative, {vader_reddit['neutral_count']} neutral")
         lines.append("")
 
     # Pre-built SWOT hints from MCP servers
@@ -874,6 +954,46 @@ def _generate_metric_reference_table(extracted: dict, is_financial: bool = False
             lines.append(f"[{label}]")
             lines.extend(category_lines)
             lines.append("")
+
+    # Add VADER sentiment metrics (news and reddit)
+    sentiment_lines = []
+
+    # News VADER sentiment
+    news_data = extracted.get("news", {})
+    if news_data.get("vader_sentiment"):
+        vader = news_data["vader_sentiment"]
+        ref_id = f"M{mid:02d}"
+        formatted = f"{vader['avg_compound']:.2f}"
+        sentiment_lines.append(f"  {ref_id}: news_sentiment = {formatted} ({vader['total_count']} articles)")
+        lookup[ref_id] = {
+            "key": "news_sentiment",
+            "raw_value": vader['avg_compound'],
+            "formatted": formatted,
+            "as_of_date": None,
+            "category": "sentiment"
+        }
+        mid += 1
+
+    # Reddit VADER sentiment
+    sent_data = extracted.get("sentiment", {})
+    if sent_data.get("vader_reddit"):
+        vader = sent_data["vader_reddit"]
+        ref_id = f"M{mid:02d}"
+        formatted = f"{vader['avg_compound']:.2f}"
+        sentiment_lines.append(f"  {ref_id}: reddit_sentiment = {formatted} ({vader['total_count']} posts)")
+        lookup[ref_id] = {
+            "key": "reddit_sentiment",
+            "raw_value": vader['avg_compound'],
+            "formatted": formatted,
+            "as_of_date": None,
+            "category": "sentiment"
+        }
+        mid += 1
+
+    if sentiment_lines:
+        lines.append("[SENTIMENT]")
+        lines.extend(sentiment_lines)
+        lines.append("")
 
     lines.append("=" * 60)
     lines.append("")
