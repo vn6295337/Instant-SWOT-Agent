@@ -359,33 +359,33 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
 
       {/* Quantitative Data Table */}
       {quantitativeRows.length > 0 && (
-        <div className="bg-card rounded-lg border border-border overflow-hidden">
-          <div className="px-3 py-2 bg-muted/50 border-b border-border">
+        <div className="bg-card rounded-lg border border-border overflow-hidden w-fit">
+          <div className="px-4 py-2 bg-muted/50 border-b border-border">
             <h3 className="text-sm font-medium text-foreground">Quantitative Data</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+          <div className="overflow-x-auto p-2">
+            <table className="text-xs">
               <thead className="bg-muted/30">
                 <tr>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">S/N</th>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Metric</th>
-                  <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">Value</th>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Data Type</th>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">As Of</th>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Source</th>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Category</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">S/N</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Metric</th>
+                  <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">Value</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Data Type</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">As Of</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Source</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Category</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {quantitativeRows.map((row, idx) => (
                   <tr key={idx} className="hover:bg-muted/20">
-                    <td className="px-2 py-1.5 text-muted-foreground">{idx + 1}</td>
-                    <td className="px-2 py-1.5">{row.metric}</td>
-                    <td className="px-2 py-1.5 text-right font-medium">{row.value}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{row.dataType}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{row.asOf}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{row.source}</td>
-                    <td className="px-2 py-1.5">{row.category}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{idx + 1}</td>
+                    <td className="px-3 py-1.5">{row.metric}</td>
+                    <td className="px-3 py-1.5 text-right font-medium">{row.value}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{row.dataType}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{row.asOf}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{row.source}</td>
+                    <td className="px-3 py-1.5">{row.category}</td>
                   </tr>
                 ))}
               </tbody>
@@ -396,32 +396,32 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
 
       {/* Qualitative Data Table */}
       {qualitativeRows.length > 0 && (
-        <div className="bg-card rounded-lg border border-border overflow-hidden">
-          <div className="px-3 py-2 bg-muted/50 border-b border-border">
+        <div className="bg-card rounded-lg border border-border overflow-hidden w-fit">
+          <div className="px-4 py-2 bg-muted/50 border-b border-border">
             <h3 className="text-sm font-medium text-foreground">Qualitative Data</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+          <div className="overflow-x-auto p-2">
+            <table className="text-xs">
               <thead className="bg-muted/30">
                 <tr>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">S/N</th>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Title</th>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Date</th>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Source</th>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Subreddit</th>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">URL</th>
-                  <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Category</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">S/N</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Title</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Date</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Source</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Subreddit</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">URL</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Category</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {qualitativeRows.map((row, idx) => (
                   <tr key={idx} className="hover:bg-muted/20">
-                    <td className="px-2 py-1.5 text-muted-foreground">{idx + 1}</td>
-                    <td className="px-2 py-1.5 max-w-[250px] truncate" title={row.title}>{row.title}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{row.date}</td>
-                    <td className="px-2 py-1.5">{row.source}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{row.subreddit}</td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-3 py-1.5 text-muted-foreground">{idx + 1}</td>
+                    <td className="px-3 py-1.5 max-w-[250px] truncate" title={row.title}>{row.title}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{row.date}</td>
+                    <td className="px-3 py-1.5">{row.source}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{row.subreddit}</td>
+                    <td className="px-3 py-1.5">
                       <a
                         href={row.url}
                         target="_blank"
@@ -432,7 +432,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     </td>
-                    <td className="px-2 py-1.5">{row.category}</td>
+                    <td className="px-3 py-1.5">{row.category}</td>
                   </tr>
                 ))}
               </tbody>
