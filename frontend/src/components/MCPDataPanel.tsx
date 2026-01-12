@@ -81,13 +81,58 @@ function formatMetricName(metric: string): string {
     .join(' ')
 }
 
-// Format numbers for display
-function formatValue(value: string | number): string {
-  if (value === null || value === undefined) return '—'
+// Metrics that should display as percentages
+const PERCENTAGE_METRICS = new Set([
+  'net_margin_pct', 'gross_margin_pct', 'operating_margin_pct',
+  'net_margin', 'gross_margin', 'operating_margin',
+  'revenue_growth', 'earnings_growth',
+  'gdp_growth', 'cpi_inflation', 'inflation', 'unemployment', 'interest_rate',
+  'historical_volatility', 'implied_volatility', 'hist_vol'
+])
 
+// Metrics that should display as ratios (x suffix)
+const RATIO_METRICS = new Set([
+  'trailing_pe', 'forward_pe', 'pb_ratio', 'ps_ratio', 'trailing_peg',
+  'price_to_fcf', 'ev_ebitda', 'ev_revenue', 'debt_to_equity', 'beta',
+  'p/e', 'p/b', 'p/s', 'peg'
+])
+
+// Metrics that are currency values (large numbers get $B/$M formatting)
+const CURRENCY_METRICS = new Set([
+  'revenue', 'net_income', 'gross_profit', 'operating_income',
+  'free_cash_flow', 'operating_cash_flow', 'total_assets', 'total_liabilities',
+  'stockholders_equity', 'cash', 'long_term_debt', 'net_debt', 'rd_expense',
+  'market_cap', 'enterprise_value'
+])
+
+// Format numbers for display with appropriate units
+function formatValue(value: string | number, metric?: string): string {
+  if (value === null || value === undefined) return '—'
   if (typeof value === 'string') return value
 
   const num = value
+  const lowerMetric = (metric || '').toLowerCase()
+
+  // Check if this is a percentage metric
+  if (PERCENTAGE_METRICS.has(lowerMetric)) {
+    return `${num.toFixed(2)}%`
+  }
+
+  // Check if this is a ratio metric
+  if (RATIO_METRICS.has(lowerMetric)) {
+    return `${num.toFixed(2)}x`
+  }
+
+  // Check if this is a currency metric (large numbers)
+  if (CURRENCY_METRICS.has(lowerMetric)) {
+    if (Math.abs(num) >= 1e12) return `$${(num / 1e12).toFixed(1)}T`
+    if (Math.abs(num) >= 1e9) return `$${(num / 1e9).toFixed(1)}B`
+    if (Math.abs(num) >= 1e6) return `$${(num / 1e6).toFixed(1)}M`
+    if (Math.abs(num) >= 1e3) return `$${(num / 1e3).toFixed(1)}K`
+    return `$${num.toFixed(2)}`
+  }
+
+  // Default formatting for other metrics
   if (Math.abs(num) >= 1e12) return `$${(num / 1e12).toFixed(1)}T`
   if (Math.abs(num) >= 1e9) return `$${(num / 1e9).toFixed(1)}B`
   if (Math.abs(num) >= 1e6) return `$${(num / 1e6).toFixed(1)}M`
@@ -210,7 +255,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
       for (const m of groupedMetrics[cat] || []) {
         rows.push({
           metric: m.metric,
-          value: formatValue(m.value),
+          value: formatValue(m.value, m.metric),
           dataType: inferDataType(m.form, m.metric),
           asOf: m.endDate || '-',
           source: inferDataSource(cat, m.metric, m.form, m.dataSource),
