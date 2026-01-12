@@ -60,7 +60,7 @@ const ROW3_Y = ROW2_Y + ROW_GAP
 const SVG_HEIGHT = 218        // Exact content height - scales to fill container
 const NODE_COUNT = 7
 const FLOW_WIDTH = GAP * (NODE_COUNT - 1) + NODE_SIZE
-const SVG_WIDTH = FLOW_WIDTH  // Match content width exactly
+const SVG_WIDTH = 530         // Wide enough for MCP group with increased spacing
 const FLOW_START_X = NODE_SIZE / 2  // Left-aligned with half-node margin
 
 const NODES = {
@@ -76,7 +76,7 @@ const NODES = {
 }
 
 const MCP_START_X = NODES.researcher.x + NODE_SIZE / 2 + 40
-const MCP_GAP = 38
+const MCP_GAP = 48
 const MCP_SERVERS = [
   { id: 'fundamentals', label: 'Fundamentals', icon: DollarSign, x: MCP_START_X },
   { id: 'valuation', label: 'Valuation', icon: TrendingUp, x: MCP_START_X + MCP_GAP },
