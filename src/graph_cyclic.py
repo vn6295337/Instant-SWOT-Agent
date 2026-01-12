@@ -4,18 +4,16 @@ from src.state import AgentState
 from src.nodes.researcher import researcher_node
 from src.nodes.analyzer import analyzer_node
 from src.nodes.critic import critic_node
-from src.nodes.editor import editor_node
 from src.utils.conditions import should_continue
 from langsmith import traceable
 
 # Create the cyclic workflow
 workflow = StateGraph(AgentState)
 
-# Add all nodes to the workflow
+# Add nodes to the workflow (Analyzer handles both initial generation and revisions)
 workflow.add_node("Researcher", RunnableLambda(researcher_node))
 workflow.add_node("Analyzer", RunnableLambda(analyzer_node))
 workflow.add_node("Critic", RunnableLambda(critic_node))
-workflow.add_node("Editor", RunnableLambda(editor_node))
 
 # Define the workflow edges
 workflow.set_entry_point("Researcher")
@@ -23,17 +21,15 @@ workflow.add_edge("Researcher", "Analyzer")
 workflow.add_edge("Analyzer", "Critic")
 
 # Add conditional edges for the self-correcting loop
+# Analyzer now handles revisions directly (no separate Editor node)
 workflow.add_conditional_edges(
-    "Critic", 
-    should_continue, 
+    "Critic",
+    should_continue,
     {
         "exit": "__end__",
-        "retry": "Editor"
+        "retry": "Analyzer"  # Route back to Analyzer for revisions
     }
 )
-
-# Complete the loop: Editor → Critic
-workflow.add_edge("Editor", "Critic")
 
 # Set the finish point
 workflow.set_finish_point("Critic")
@@ -43,9 +39,9 @@ workflow.config = {
     "project_name": "AI-strategy-agent-cyclic",
     "tags": ["self-correcting", "quality-loop", "swot-analysis"],
     "metadata": {
-        "version": "1.0",
+        "version": "2.0",
         "environment": "development",
-        "workflow_type": "researcher-analyzer-critic-editor"
+        "workflow_type": "researcher-analyzer-critic"
     }
 }
 
@@ -91,7 +87,7 @@ if __name__ == "__main__":
     target_company = "Tesla"
     
     print(f"🔍 Running Self-Correcting SWOT Analysis for {target_company}...")
-    print("📝 This workflow includes: Researcher → Analyzer → Critic → Editor (loop)")
+    print("📝 This workflow includes: Researcher → Analyzer → Critic → Analyzer (revision loop)")
     print("🎯 Loop continues until score ≥ 7 or 3 revisions attempted\n")
     
     # Execute the workflow
@@ -115,7 +111,7 @@ if __name__ == "__main__":
     print(f"   - Initial Quality: Improved from unknown to {final_score}/10")
     print(f"   - Revisions Made: {final_revision_count}")
     print(f"   - Final Report Length: {len(result['draft_report'])} characters")
-    print(f"   - Workflow: Researcher → Analyzer → Critic → Editor (loop)")
+    print(f"   - Workflow: Researcher → Analyzer → Critic → Analyzer (revision loop)")
     print(f"   - Tracing: Enhanced LangSmith traces available")
     
     # Quality assessment

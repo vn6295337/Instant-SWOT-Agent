@@ -1,7 +1,6 @@
 from src.llm_client import get_llm_client
 from langsmith import traceable
 import json
-import re
 import time
 
 
@@ -13,251 +12,207 @@ def _add_activity_log(workflow_id, progress_store, step, message):
 
 
 # ============================================================
-# DETERMINISTIC SCORING FUNCTIONS
+# LLM-ONLY WEIGHTED RUBRIC EVALUATION
 # ============================================================
 
-def check_swot_sections(report: str) -> dict:
-    """
-    Check if all 4 SWOT sections are present.
-    Returns dict with section presence and score (0-2 points).
-    """
-    report_lower = report.lower()
+CRITIC_SYSTEM_PROMPT = """You are a SWOT Output Critic and Quality Gatekeeper.
 
-    sections = {
-        "strengths": bool(re.search(r'\bstrengths?\b', report_lower)),
-        "weaknesses": bool(re.search(r'\bweaknesses?\b', report_lower)),
-        "opportunities": bool(re.search(r'\bopportunit(y|ies)\b', report_lower)),
-        "threats": bool(re.search(r'\bthreats?\b', report_lower))
-    }
+## ROLE
+Act as an independent, impartial evaluator that reviews SWOT analyses. Your function is to:
+1. Verify factual accuracy against provided input data
+2. Assess quality against a weighted rubric
+3. Decide whether the output PASSES or FAILS
+4. Provide actionable feedback if rejected
 
-    present_count = sum(sections.values())
-    score = 2 if present_count == 4 else (1 if present_count >= 2 else 0)
+You are a quality gate, not a collaborator. Be strict.
 
-    return {
-        "sections": sections,
-        "present_count": present_count,
-        "score": score,
-        "max_score": 2
-    }
+## VALID METRICS SCHEMA
 
+**Fundamentals:** revenue, net_income, net_margin_pct, total_assets, total_liabilities, stockholders_equity, operating_margin_pct, total_debt, operating_cash_flow, free_cash_flow
 
-def count_numeric_citations(report: str) -> dict:
-    """
-    Count specific facts/numbers cited in the report.
-    Returns dict with count and score (0-3 points).
-    """
-    # Patterns for numeric citations
-    patterns = [
-        r'\$[\d,]+\.?\d*[BMK]?',           # Dollar amounts: $3.6B, $100M
-        r'\d+\.?\d*\s*%',                   # Percentages: 7.26%, 42.59%
-        r'\d+\.?\d*x',                      # Multiples: 0.13x, 2.35x
-        r'P/E[:\s]+\d+',                    # P/E ratios
-        r'P/S[:\s]+\d+',                    # P/S ratios
-        r'P/B[:\s]+\d+',                    # P/B ratios
-        r'EV/EBITDA[:\s]+\d+',              # EV/EBITDA
-        r'PEG[:\s]+\d+',                    # PEG ratio
-        r'VIX[:\s]+\d+',                    # VIX
-        r'Beta[:\s]+\d+',                   # Beta
-        r'\d+/100',                         # Scores: 67.38/100
-        r'CAGR[:\s]*\d+',                   # CAGR
-        r'\d{4}',                           # Years: 2024, 2025
-    ]
+**Valuation:** current_price, market_cap, enterprise_value, trailing_pe, forward_pe, ps_ratio, pb_ratio, trailing_peg, forward_peg, earnings_growth, revenue_growth
 
-    citations = []
-    for pattern in patterns:
-        matches = re.findall(pattern, report, re.IGNORECASE)
-        citations.extend(matches)
+**Volatility:** vix, vxn, beta, historical_volatility, implied_volatility
 
-    # Deduplicate
-    unique_citations = list(set(citations))
-    count = len(unique_citations)
+**Macro:** gdp_growth, interest_rate, cpi_inflation, unemployment
 
-    # Score: 0-2 citations = 0pts, 3-5 = 1pt, 6-10 = 2pts, 10+ = 3pts
-    if count >= 10:
-        score = 3
-    elif count >= 6:
-        score = 2
-    elif count >= 3:
-        score = 1
-    else:
-        score = 0
+**Qualitative:** News (title, date, source, url), Sentiment (title, date, source, url)
 
-    return {
-        "count": count,
-        "examples": unique_citations[:10],  # Show first 10
-        "score": score,
-        "max_score": 3
-    }
+## EVALUATION RUBRIC (Weighted)
 
+### 1. Evidence Grounding (25%) — HARD FLOOR: >=7
+- All claims cite specific metrics from input data
+- No fabricated metrics (hallucination check)
+- Field names match schema
+- 9-10: Every claim traceable; 7-8: Nearly all grounded; 5-6: Most grounded, 2-3 unverifiable; 3-4: Multiple unsupported; 1-2: Clear hallucinations
+- **If ANY fabricated metric detected, cap at 4**
 
-def check_data_sources(report: str, sources_available: list) -> dict:
-    """
-    Check if report references data from available MCP sources.
-    Returns dict with coverage and score (0-2 points).
-    """
-    report_lower = report.lower()
+### 2. Constraint Compliance (20%) — HARD FLOOR: >=6
+- No buy/sell/hold recommendations
+- Temporal labels accurate (TTM, FY, forward)
+- "DATA NOT PROVIDED" used for missing metrics
+- 9-10: All constraints respected; 7-8: Minor issues; 5-6: One moderate violation; 3-4: Multiple violations; 1-2: Systematic violations
 
-    source_keywords = {
-        "fundamentals": ["revenue", "net margin", "debt", "cash flow", "eps", "earnings"],
-        "volatility": ["beta", "volatility", "vix", "price swing"],
-        "macro": ["gdp", "interest rate", "inflation", "unemployment", "fed"],
-        "valuation": ["p/e", "p/s", "p/b", "ev/ebitda", "peg", "valuation", "market cap"],
-        "news": ["news", "analyst", "article", "report"],
-        "sentiment": ["sentiment", "bullish", "bearish", "reddit", "finnhub"]
-    }
+### 3. Specificity & Actionability (20%)
+- Company-specific, not generic templates
+- Quantified findings (not "strong margins" but "31% operating margin")
+- Avoids business cliches
+- 9-10: Every point specific and quantified; 7-8: Mostly specific; 5-6: Mix of specific/generic; 3-4: Mostly generic; 1-2: Template-like
 
-    sources_referenced = {}
-    for source in sources_available:
-        keywords = source_keywords.get(source, [])
-        found = any(kw in report_lower for kw in keywords)
-        sources_referenced[source] = found
+### 4. Strategic Insight (15%)
+- Synthesis across multiple data sources
+- Prioritization by materiality
+- Goes beyond restating metrics to interpreting implications
+- 9-10: Identifies causal relationships; 7-8: Good synthesis; 5-6: Surface-level; 3-4: Restates metrics; 1-2: No value-add
 
-    referenced_count = sum(sources_referenced.values())
-    coverage_pct = (referenced_count / len(sources_available) * 100) if sources_available else 0
+### 5. Completeness & Balance (10%)
+Required sections:
+- Strengths (Finding, Strategic Implication, Durability)
+- Weaknesses (Finding, Severity, Trend, Remediation Levers)
+- Opportunities (Catalyst, Timing, Execution Requirements)
+- Threats (Risk Factor, Probability, Impact, Mitigation Options)
+- Data Quality Notes
+- 9-10: All present and substantive; 7-8: All present, minor gaps; 5-6: Missing 1 section; 3-4: Multiple missing; 1-2: Major gaps
 
-    # Score: <50% = 0pts, 50-75% = 1pt, >75% = 2pts
-    if coverage_pct >= 75:
-        score = 2
-    elif coverage_pct >= 50:
-        score = 1
-    else:
-        score = 0
+### 6. Clarity & Structure (10%)
+- Clean formatting, logical grouping
+- Easy to scan (not walls of text)
+- No contradictions
+- 9-10: Impeccable; 7-8: Well-structured; 5-6: Readable but dense; 3-4: Hard to follow; 1-2: Poorly organized
 
-    return {
-        "sources_referenced": sources_referenced,
-        "referenced_count": referenced_count,
-        "total_available": len(sources_available),
-        "coverage_pct": round(coverage_pct, 1),
-        "score": score,
-        "max_score": 2
-    }
+## PASS CONDITIONS (ALL must be met)
+1. Weighted average >= 7.0
+2. Evidence Grounding >= 7
+3. Constraint Compliance >= 6
+4. No individual criterion below 5
 
+## OUTPUT FORMAT (JSON only, no other text)
 
-def check_section_balance(report: str) -> dict:
-    """
-    Check if SWOT sections are reasonably balanced (not all items in one section).
-    Returns dict with balance info and score (0-1 point).
-    """
-    # Count bullet points or list items per section
-    sections = ["strength", "weakness", "opportunit", "threat"]
-
-    # Split report by sections and count items
-    report_lower = report.lower()
-    item_counts = {}
-
-    for section in sections:
-        # Find section and count bullet points after it
-        pattern = rf'{section}.*?(?=(?:weakness|opportunit|threat|$))'
-        match = re.search(pattern, report_lower, re.DOTALL)
-        if match:
-            section_text = match.group()
-            # Count bullet points (-, *, •) or numbered items
-            items = len(re.findall(r'[\-\*\•]\s+\w|^\d+\.\s+\w', section_text, re.MULTILINE))
-            item_counts[section] = max(items, 1)  # At least 1 if section exists
-
-    if not item_counts:
-        return {"balanced": False, "score": 0, "max_score": 1}
-
-    counts = list(item_counts.values())
-    avg = sum(counts) / len(counts)
-
-    # Check if any section has less than 25% of average (unbalanced)
-    balanced = all(c >= avg * 0.25 for c in counts) if avg > 0 else False
-
-    return {
-        "item_counts": item_counts,
-        "balanced": balanced,
-        "score": 1 if balanced else 0,
-        "max_score": 1
-    }
-
-
-def run_deterministic_checks(report: str, sources_available: list) -> dict:
-    """
-    Run all deterministic checks and return combined results.
-    Total possible: 8 points
-    """
-    sections_check = check_swot_sections(report)
-    citations_check = count_numeric_citations(report)
-    sources_check = check_data_sources(report, sources_available)
-    balance_check = check_section_balance(report)
-
-    total_score = (
-        sections_check["score"] +
-        citations_check["score"] +
-        sources_check["score"] +
-        balance_check["score"]
-    )
-    max_score = 8
-
-    # Convert to 1-10 scale (deterministic portion = 40% weight)
-    normalized_score = (total_score / max_score) * 4  # 0-4 points
-
-    return {
-        "sections": sections_check,
-        "citations": citations_check,
-        "sources": sources_check,
-        "balance": balance_check,
-        "total_score": total_score,
-        "max_score": max_score,
-        "normalized_score": round(normalized_score, 2)
-    }
-
-
-# ============================================================
-# LLM SCORING
-# ============================================================
-
-LLM_RUBRIC = """
-You are a strategy evaluator. Given a SWOT analysis and the SOURCE DATA it should be based on, score it on a scale of 1 to 6.
-
-Scoring Criteria:
-1. Strategic Alignment (0-2 pts): Does the analysis align with the given strategic focus?
-2. Data Grounding (0-2 pts): Does EVERY claim cite specific numbers from the source data? Penalize any invented facts not in the data.
-3. Logical Consistency (0-2 pts): Are S/O clearly positive and W/T clearly negative? No contradictions?
-
-IMPORTANT: If the analysis mentions facts/numbers NOT present in the source data, score Data Grounding as 0.
-
-Respond in this JSON format only, no other text:
 {
-  "score": <int 1-6>,
-  "strategic_alignment": <0-2>,
-  "data_grounding": <0-2>,
-  "logical_consistency": <0-2>,
-  "reasoning": "<string>"
+  "status": "APPROVED" or "REJECTED",
+  "weighted_score": <float>,
+  "scores": {
+    "evidence_grounding": <1-10>,
+    "constraint_compliance": <1-10>,
+    "specificity_actionability": <1-10>,
+    "strategic_insight": <1-10>,
+    "completeness_balance": <1-10>,
+    "clarity_structure": <1-10>
+  },
+  "hard_floor_violations": ["list of violated floors or empty array"],
+  "hallucinations_detected": ["list of fabricated metrics or empty array"],
+  "key_deficiencies": ["prioritized list, max 5"],
+  "strengths_to_preserve": ["elements done well"],
+  "actionable_feedback": ["specific rewrite instructions, max 5"]
 }
 """
 
+# Weights for each criterion
+CRITERION_WEIGHTS = {
+    "evidence_grounding": 0.25,
+    "constraint_compliance": 0.20,
+    "specificity_actionability": 0.20,
+    "strategic_insight": 0.15,
+    "completeness_balance": 0.10,
+    "clarity_structure": 0.10,
+}
 
-def run_llm_evaluation(report: str, strategy_focus: str, llm, source_data: str = "") -> dict:
+# Hard floor requirements
+HARD_FLOORS = {
+    "evidence_grounding": 7,
+    "constraint_compliance": 6,
+}
+
+# Minimum score for any criterion
+MIN_INDIVIDUAL_SCORE = 5
+
+
+def calculate_weighted_score(scores: dict) -> float:
+    """Calculate weighted average from individual criterion scores."""
+    total = 0.0
+    for criterion, weight in CRITERION_WEIGHTS.items():
+        score = scores.get(criterion, 5)  # Default to 5 if missing
+        total += score * weight
+    return round(total, 2)
+
+
+def check_pass_conditions(scores: dict, weighted_score: float) -> tuple:
     """
-    Run LLM-based qualitative evaluation.
-    Returns score (1-6) and reasoning.
+    Check if all pass conditions are met.
+    Returns (passed: bool, violations: list)
     """
-    prompt = f"""
-SWOT Draft:
+    violations = []
+
+    # Check weighted average threshold
+    if weighted_score < 7.0:
+        violations.append(f"Weighted score {weighted_score:.1f} < 7.0 threshold")
+
+    # Check hard floors
+    for criterion, floor in HARD_FLOORS.items():
+        score = scores.get(criterion, 0)
+        if score < floor:
+            violations.append(f"{criterion}: {score} < {floor} (hard floor)")
+
+    # Check minimum individual scores
+    for criterion, score in scores.items():
+        if score < MIN_INDIVIDUAL_SCORE:
+            violations.append(f"{criterion}: {score} < {MIN_INDIVIDUAL_SCORE} (minimum)")
+
+    return (len(violations) == 0, violations)
+
+
+def run_llm_evaluation(report: str, source_data: str, iteration: int, llm) -> dict:
+    """
+    Run LLM-based evaluation with weighted rubric.
+
+    Args:
+        report: The SWOT output to evaluate
+        source_data: The source data the SWOT should be based on
+        iteration: Current revision number (1, 2, or 3)
+        llm: LLM client instance
+
+    Returns:
+        Evaluation result dict with scores, status, and feedback
+    """
+    # Truncate source data if too long
+    max_source_len = 8000
+    if len(source_data) > max_source_len:
+        source_data = source_data[:max_source_len] + "\n... [truncated]"
+
+    prompt = f"""{CRITIC_SYSTEM_PROMPT}
+
+## INPUTS
+
+**Iteration:** {iteration} of 3
+
+**Source Data (the SWOT should be based ONLY on this):**
+{source_data}
+
+**SWOT Output to Evaluate:**
 {report}
 
-Strategic Focus: {strategy_focus}
-
-SOURCE DATA (the analysis should be based ONLY on this):
-{source_data if source_data else "No source data provided"}
-
-{LLM_RUBRIC}
-"""
+Evaluate strictly and respond with JSON only."""
 
     response, provider, error, providers_failed = llm.query(prompt, temperature=0)
 
     if error:
+        # Return default middle scores on error
         return {
-            "score": 3,  # Default middle score
-            "reasoning": f"LLM evaluation failed: {error}",
+            "status": "REJECTED",
+            "weighted_score": 5.0,
+            "scores": {k: 5 for k in CRITERION_WEIGHTS.keys()},
+            "hard_floor_violations": [],
+            "hallucinations_detected": [],
+            "key_deficiencies": [f"LLM evaluation failed: {error}"],
+            "strengths_to_preserve": [],
+            "actionable_feedback": ["Unable to evaluate - please retry"],
             "provider": provider,
             "providers_failed": providers_failed,
             "error": True
         }
 
     try:
+        # Parse JSON from response
         content = response.strip()
         if "{" in content:
             json_start = content.index("{")
@@ -265,40 +220,74 @@ SOURCE DATA (the analysis should be based ONLY on this):
             content = content[json_start:json_end]
 
         parsed = json.loads(content)
+
+        # Extract and validate scores
+        scores = parsed.get("scores", {})
+        for criterion in CRITERION_WEIGHTS.keys():
+            if criterion not in scores:
+                scores[criterion] = 5  # Default
+            else:
+                scores[criterion] = min(max(int(scores[criterion]), 1), 10)  # Clamp 1-10
+
+        # Calculate weighted score
+        weighted_score = calculate_weighted_score(scores)
+
+        # Check pass conditions
+        passed, violations = check_pass_conditions(scores, weighted_score)
+
+        # Determine status
+        status = "APPROVED" if passed else "REJECTED"
+
+        # Override status if LLM said APPROVED but conditions not met
+        if parsed.get("status") == "APPROVED" and not passed:
+            status = "REJECTED"
+
         return {
-            "score": min(max(parsed.get("score", 3), 1), 6),  # Clamp 1-6
-            "strategic_alignment": parsed.get("strategic_alignment", 0),
-            "data_grounding": parsed.get("data_grounding", 0),
-            "logical_consistency": parsed.get("logical_consistency", 0),
-            "reasoning": parsed.get("reasoning", "No reasoning provided"),
+            "status": status,
+            "weighted_score": weighted_score,
+            "scores": scores,
+            "hard_floor_violations": parsed.get("hard_floor_violations", violations),
+            "hallucinations_detected": parsed.get("hallucinations_detected", []),
+            "key_deficiencies": parsed.get("key_deficiencies", [])[:5],
+            "strengths_to_preserve": parsed.get("strengths_to_preserve", []),
+            "actionable_feedback": parsed.get("actionable_feedback", [])[:5],
             "provider": provider,
             "providers_failed": providers_failed,
             "error": False
         }
+
     except (json.JSONDecodeError, ValueError) as e:
         return {
-            "score": 3,
-            "reasoning": f"JSON parsing failed: {str(e)[:100]}",
+            "status": "REJECTED",
+            "weighted_score": 5.0,
+            "scores": {k: 5 for k in CRITERION_WEIGHTS.keys()},
+            "hard_floor_violations": [],
+            "hallucinations_detected": [],
+            "key_deficiencies": [f"JSON parsing failed: {str(e)[:100]}"],
+            "strengths_to_preserve": [],
+            "actionable_feedback": ["Evaluation response was malformed - please retry"],
             "provider": provider,
             "providers_failed": providers_failed,
             "error": True
         }
 
 
-# ============================================================
-# HYBRID SCORING
-# ============================================================
-
 @traceable(name="Critic")
 def critic_node(state, workflow_id=None, progress_store=None):
     """
-    Critic node with hybrid scoring:
-    - Deterministic checks (40%): sections, citations, source coverage, balance
-    - LLM evaluation (60%): strategic alignment, insight quality, consistency
+    Critic node with LLM-only weighted rubric evaluation.
 
-    Final score = deterministic (0-4) + LLM (0-6) = 1-10 scale
+    Evaluates SWOT output on 6 criteria with weighted scoring:
+    - Evidence Grounding (25%) - hard floor >= 7
+    - Constraint Compliance (20%) - hard floor >= 6
+    - Specificity & Actionability (20%)
+    - Strategic Insight (15%)
+    - Completeness & Balance (10%)
+    - Clarity & Structure (10%)
+
+    Pass requires: weighted avg >= 7.0, hard floors met, no score < 5
     """
-    # Extract workflow_id and progress_store from state (graph invokes with state only)
+    # Extract workflow_id and progress_store from state
     if workflow_id is None:
         workflow_id = state.get("workflow_id")
     if progress_store is None:
@@ -307,7 +296,6 @@ def critic_node(state, workflow_id=None, progress_store=None):
     # Skip evaluation if workflow has an error (abort mode)
     if state.get("error"):
         _add_activity_log(workflow_id, progress_store, "critic", "Skipping evaluation - workflow aborted")
-        # Simplify error message for user display
         error_msg = state.get("error", "")
         if "429" in error_msg or "Too Many Requests" in error_msg:
             user_friendly_msg = "All AI providers are temporarily unavailable due to rate limits. Please wait a moment and try again."
@@ -320,50 +308,27 @@ def critic_node(state, workflow_id=None, progress_store=None):
         return state
 
     report = state.get("draft_report", "")
-    strategy_focus = state.get("strategy_focus", "Cost Leadership")
     revision_count = state.get("revision_count", 0)
+    iteration = revision_count + 1  # 1-indexed for display
 
     # Log evaluation start
-    _add_activity_log(workflow_id, progress_store, "critic", f"Evaluating SWOT quality (revision #{revision_count})...")
+    _add_activity_log(workflow_id, progress_store, "critic", f"Evaluating SWOT quality (iteration {iteration}/3)...")
 
-    # Parse sources_available from raw_data
-    sources_available = []
-    try:
-        raw_data = json.loads(state.get("raw_data", "{}"))
-        sources_available = raw_data.get("sources_available", [])
-    except:
-        sources_available = ["fundamentals", "volatility", "macro", "valuation", "news", "sentiment"]
+    # Get source data for grounding verification
+    source_data = state.get("raw_data", "")
 
-    # Run deterministic checks
-    print("Running deterministic checks...")
-    det_results = run_deterministic_checks(report, sources_available)
-    det_score = det_results["normalized_score"]  # 0-4
-
-    print(f"  Sections: {det_results['sections']['present_count']}/4 ({det_results['sections']['score']}/{det_results['sections']['max_score']} pts)")
-    print(f"  Citations: {det_results['citations']['count']} found ({det_results['citations']['score']}/{det_results['citations']['max_score']} pts)")
-    print(f"  Source Coverage: {det_results['sources']['coverage_pct']}% ({det_results['sources']['score']}/{det_results['sources']['max_score']} pts)")
-    print(f"  Balance: {'Yes' if det_results['balance']['balanced'] else 'No'} ({det_results['balance']['score']}/{det_results['balance']['max_score']} pts)")
-    print(f"  Deterministic Score: {det_score:.1f}/4")
-
-    # Run LLM evaluation with source data for grounding check
-    print("Running LLM evaluation...")
+    # Run LLM evaluation
+    print(f"Running LLM evaluation (iteration {iteration})...")
     llm = get_llm_client()
-    _add_activity_log(workflow_id, progress_store, "critic", f"Calling LLM for quality evaluation...")
+    _add_activity_log(workflow_id, progress_store, "critic", "Calling LLM for quality evaluation...")
     start_time = time.time()
 
-    # Get formatted source data for grounding verification
-    source_data = state.get("raw_data", "")
-    # Truncate if too long to avoid token limits
-    if len(source_data) > 4000:
-        source_data = source_data[:4000] + "\n... [truncated]"
-
-    llm_results = run_llm_evaluation(report, strategy_focus, llm, source_data)
-    llm_score = llm_results["score"]  # 1-6
+    result = run_llm_evaluation(report, source_data, iteration, llm)
     elapsed = time.time() - start_time
-    provider = llm_results.get('provider', 'unknown')
+    provider = result.get('provider', 'unknown')
 
     # Log failed providers
-    providers_failed = llm_results.get('providers_failed', [])
+    providers_failed = result.get('providers_failed', [])
     for pf in providers_failed:
         _add_activity_log(workflow_id, progress_store, "critic", f"LLM {pf['name']} failed: {pf['error']}")
 
@@ -372,49 +337,98 @@ def critic_node(state, workflow_id=None, progress_store=None):
         state["llm_providers_failed"] = []
     state["llm_providers_failed"].extend([pf["name"] for pf in providers_failed])
 
-    print(f"  LLM Score: {llm_score}/6 ({provider})")
-    _add_activity_log(workflow_id, progress_store, "critic", f"LLM evaluation via {provider} ({elapsed:.1f}s)")
+    # Extract results
+    status = result["status"]
+    weighted_score = result["weighted_score"]
+    scores = result["scores"]
 
-    # Combine scores: deterministic (0-4) + LLM (1-6) = 1-10
-    final_score = det_score + llm_score
-    final_score = min(max(final_score, 1), 10)  # Clamp 1-10
+    # Handle ESCALATE if max iterations reached
+    if iteration > 3 and status == "REJECTED":
+        status = "ESCALATE"
+        _add_activity_log(workflow_id, progress_store, "critic", "Max iterations reached - escalating for human review")
 
-    print(f"Critic scored: {final_score:.1f}/10 (det:{det_score:.1f} + llm:{llm_score})")
+    # Log scores
+    print(f"  Status: {status}")
+    print(f"  Weighted Score: {weighted_score:.1f}/10")
+    for criterion, score in scores.items():
+        floor = HARD_FLOORS.get(criterion, "-")
+        print(f"    {criterion}: {score}/10 (floor: {floor})")
 
-    # Log score result with revision decision hint
-    score_msg = f"Score: {final_score:.0f}/10"
-    if final_score < 7:
-        score_msg += " - needs revision"
+    _add_activity_log(workflow_id, progress_store, "critic", f"Evaluation via {provider} ({elapsed:.1f}s)")
+
+    # Log status and score
+    if status == "APPROVED":
+        score_msg = f"APPROVED - Score: {weighted_score:.1f}/10"
+    elif status == "ESCALATE":
+        score_msg = f"ESCALATE - Score: {weighted_score:.1f}/10 (max iterations)"
     else:
-        score_msg += " - quality passed"
+        score_msg = f"REJECTED - Score: {weighted_score:.1f}/10 - needs revision"
     _add_activity_log(workflow_id, progress_store, "critic", score_msg)
 
-    # Build detailed critique
-    critique_parts = [
-        f"Deterministic Analysis ({det_results['total_score']}/{det_results['max_score']} pts):",
-        f"  - SWOT Sections: {det_results['sections']['present_count']}/4 present",
-        f"  - Numeric Citations: {det_results['citations']['count']} found",
-        f"  - Data Source Coverage: {det_results['sources']['coverage_pct']}%",
-        f"  - Section Balance: {'Balanced' if det_results['balance']['balanced'] else 'Unbalanced'}",
+    # Build critique message
+    critique_lines = [
+        f"Status: {status}",
+        f"Weighted Score: {weighted_score:.1f}/10",
         "",
-        f"LLM Evaluation ({llm_score}/6 pts):",
-        f"  {llm_results['reasoning']}"
+        "Criterion Scores:",
     ]
 
-    state["critique"] = "\n".join(critique_parts)
-    state["score"] = final_score
+    for criterion, score in scores.items():
+        weight = int(CRITERION_WEIGHTS[criterion] * 100)
+        floor = HARD_FLOORS.get(criterion)
+        floor_str = f" (floor: {floor})" if floor else ""
+        passed = "PASS" if score >= (floor or MIN_INDIVIDUAL_SCORE) else "FAIL"
+        critique_lines.append(f"  {criterion}: {score}/10 [{weight}%] {floor_str} - {passed}")
+
+    if result.get("hard_floor_violations"):
+        critique_lines.append("")
+        critique_lines.append("Hard Floor Violations:")
+        for v in result["hard_floor_violations"]:
+            critique_lines.append(f"  - {v}")
+
+    if result.get("hallucinations_detected"):
+        critique_lines.append("")
+        critique_lines.append("Hallucinations Detected:")
+        for h in result["hallucinations_detected"]:
+            critique_lines.append(f"  - {h}")
+
+    if result.get("key_deficiencies"):
+        critique_lines.append("")
+        critique_lines.append("Key Deficiencies:")
+        for i, d in enumerate(result["key_deficiencies"], 1):
+            critique_lines.append(f"  {i}. {d}")
+
+    if result.get("actionable_feedback"):
+        critique_lines.append("")
+        critique_lines.append("Actionable Feedback:")
+        for i, f in enumerate(result["actionable_feedback"], 1):
+            critique_lines.append(f"  {i}. {f}")
+
+    if result.get("strengths_to_preserve"):
+        critique_lines.append("")
+        critique_lines.append("Strengths to Preserve:")
+        for s in result["strengths_to_preserve"]:
+            critique_lines.append(f"  - {s}")
+
+    state["critique"] = "\n".join(critique_lines)
+    state["score"] = weighted_score
     state["critique_details"] = {
-        "deterministic": det_results,
-        "llm": llm_results,
-        "final_score": final_score
+        "status": status,
+        "weighted_score": weighted_score,
+        "scores": scores,
+        "hard_floor_violations": result.get("hard_floor_violations", []),
+        "hallucinations_detected": result.get("hallucinations_detected", []),
+        "key_deficiencies": result.get("key_deficiencies", []),
+        "strengths_to_preserve": result.get("strengths_to_preserve", []),
+        "actionable_feedback": result.get("actionable_feedback", []),
     }
 
     # Update progress
     if workflow_id and progress_store:
         progress_store[workflow_id].update({
             "current_step": "critic",
-            "revision_count": state.get("revision_count", 0),
-            "score": final_score
+            "revision_count": revision_count,
+            "score": weighted_score
         })
 
     return state

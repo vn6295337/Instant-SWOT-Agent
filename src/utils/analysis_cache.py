@@ -1,7 +1,7 @@
 """
 Analysis Cache - Supabase PostgreSQL caching for final SWOT analysis results.
 
-Caches Editor agent output with 24h TTL to avoid re-running the full pipeline.
+Caches final SWOT analysis output with 24h TTL to avoid re-running the full pipeline.
 Uses schema: asa.analysis_cache
 """
 

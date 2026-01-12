@@ -16,7 +16,7 @@ def test_analyzer_failure():
 
     # Monkey patch the analyzer node to force poor quality
     def force_poor_analyzer(state):
-        """Force a poor quality draft to trigger Editor"""
+        """Force a poor quality draft to trigger revision loop"""
         state["draft_report"] = "Bad analysis. No details. Incomplete."
         print("⚠️  FORCED POOR QUALITY: Overriding with very weak content")
         return state
@@ -40,10 +40,10 @@ def test_critic_failure():
     
     # Monkey patch the critic to force a low score
     def force_low_score_critic(state):
-        """Force a low score to trigger Editor"""
+        """Force a low score to trigger revision loop"""
         state["score"] = 3  # Low score to force revision
         state["critique"] = "Forced low score for testing self-correction loop"
-        print("⚠️  FORCED LOW SCORE: 3/10 to trigger Editor")
+        print("⚠️  FORCED LOW SCORE: 3/10 to trigger revision loop")
         return state
 
     # Temporarily replace critic in the workflow

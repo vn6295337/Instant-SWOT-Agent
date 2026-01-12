@@ -1,8 +1,121 @@
-from src.tools import get_strategy_context
 from src.llm_client import get_llm_client
 from langsmith import traceable
 import time
 import json
+
+
+# Financial institution detection for EV/EBITDA exclusion
+FINANCIAL_SECTORS = {
+    "financial services", "financial", "banking", "banks",
+    "insurance", "real estate investment trust", "reit",
+    "investment management", "capital markets", "diversified financial services",
+    "consumer finance", "asset management", "mortgage finance",
+}
+
+FINANCIAL_INDUSTRIES = {
+    "banks", "regional banks", "diversified banks", "money center banks",
+    "insurance", "life insurance", "property insurance", "reinsurance",
+    "real estate", "reit", "mortgage reits", "equity reits",
+    "asset management", "investment banking", "capital markets",
+    "consumer finance", "specialty finance",
+}
+
+# Fallback: known financial tickers when sector data unavailable
+FINANCIAL_TICKERS = {
+    "JPM", "BAC", "WFC", "GS", "MS", "C", "USB", "PNC", "TFC", "COF",
+    "AXP", "BLK", "SCHW", "CME", "ICE", "SPGI", "MCO",
+    "BRK.A", "BRK.B", "MET", "PRU", "AIG", "ALL", "TRV", "PGR", "CB",
+    "AMT", "PLD", "CCI", "EQIX", "PSA", "O", "WELL", "AVB", "EQR",
+}
+
+# =============================================================================
+# REVISION MODE: Conditional Focus Area Blocks
+# These are included in revision prompts based on which rubric criteria failed
+# =============================================================================
+
+EVIDENCE_GROUNDING_BLOCK = """
+**EVIDENCE GROUNDING (Critical)**
+- Every claim must cite a specific metric from the input data
+- Use exact field names: `revenue`, `net_margin_pct`, `trailing_pe`, etc.
+- Format citations as: "[Metric]: [Value] ([Source], [Period])"
+- If a metric was flagged as fabricated, remove it entirely or replace with actual data
+"""
+
+CONSTRAINT_COMPLIANCE_BLOCK = """
+**CONSTRAINT COMPLIANCE (Critical)**
+- Remove any language that sounds like investment advice
+- Check all temporal labels — TTM vs FY vs Q must match the source
+- Add confidence levels to key conclusions: (High/Medium/Low)
+- Do not use EV/EBITDA for financial institutions
+- For missing data, state "DATA NOT PROVIDED" — do not estimate
+"""
+
+SPECIFICITY_BLOCK = """
+**SPECIFICITY & ACTIONABILITY**
+- Replace generic statements with company-specific observations
+- Quantify every claim possible: not "strong margins" but "31.0% operating margin"
+- Remove business clichés: "leveraging," "best-in-class," "synergies"
+"""
+
+INSIGHT_BLOCK = """
+**STRATEGIC INSIGHT**
+- Connect observations across data baskets (e.g., link margin trends to macro rates)
+- Go beyond restating metrics — explain WHY they matter
+- Identify non-obvious relationships in the data
+"""
+
+COMPLETENESS_BLOCK = """
+**COMPLETENESS & BALANCE**
+- Ensure ALL required sections are present (Strengths, Weaknesses, Opportunities, Threats, Data Quality Notes)
+- Balance quadrants — no section should be filler or disproportionately thin
+"""
+
+CLARITY_BLOCK = """
+**CLARITY & STRUCTURE**
+- Use consistent formatting throughout
+- Ensure no contradictions across sections
+- Make output scannable — executives should grasp key points in 30 seconds
+"""
+
+
+def _is_financial_institution(sector: str, industry: str, ticker: str) -> bool:
+    """Detect if company is a financial institution (EV/EBITDA not meaningful)."""
+    sector_lower = (sector or "").lower().strip()
+    industry_lower = (industry or "").lower().strip()
+
+    if any(fs in sector_lower for fs in FINANCIAL_SECTORS):
+        return True
+    if any(fi in industry_lower for fi in FINANCIAL_INDUSTRIES):
+        return True
+    if ticker and ticker.upper() in FINANCIAL_TICKERS:
+        return True
+    return False
+
+
+def _extract_company_profile(raw_data: str) -> dict:
+    """Extract sector/industry from Yahoo Finance data if available."""
+    try:
+        data = json.loads(raw_data)
+    except json.JSONDecodeError:
+        return {}
+
+    multi_source = data.get("multi_source", {})
+
+    # Try valuation Yahoo Finance data first
+    yf_val = multi_source.get("valuation_all", {}).get("yahoo_finance", {}).get("data", {})
+    profile = yf_val.get("profile", {})
+
+    if profile.get("sector"):
+        return {"sector": profile.get("sector"), "industry": profile.get("industry")}
+
+    # Fallback to fundamentals Yahoo Finance
+    yf_fund = multi_source.get("fundamentals_all", {}).get("yahoo_finance", {}).get("data", {})
+    fund_profile = yf_fund.get("profile", {})
+
+    return {
+        "sector": fund_profile.get("sector", ""),
+        "industry": fund_profile.get("industry", "")
+    }
 
 
 def _add_activity_log(workflow_id, progress_store, step, message):
@@ -118,8 +231,13 @@ def _get_value(metric_data) -> any:
     return metric_data
 
 
-def _generate_data_report(raw_data: str) -> str:
-    """Generate complete multi-source data report with simple tables."""
+def _generate_data_report(raw_data: str, is_financial: bool = False) -> str:
+    """Generate complete multi-source data report with simple tables.
+
+    Args:
+        raw_data: JSON string of research data
+        is_financial: If True, exclude EV/EBITDA for financial institutions
+    """
     try:
         data = json.loads(raw_data)
     except json.JSONDecodeError:
@@ -195,13 +313,16 @@ def _generate_data_report(raw_data: str) -> str:
             ("P/E Forward", "forward_pe", lambda v: _format_number(v, "x")),
             ("P/B Ratio", "pb_ratio", lambda v: _format_number(v, "x")),
             ("P/S Ratio", "ps_ratio", lambda v: _format_number(v, "x")),
-            ("EV/EBITDA", "ev_ebitda", lambda v: _format_number(v, "x")),
-            ("EV/Revenue", "ev_revenue", lambda v: _format_number(v, "x")),
             ("PEG Ratio", "trailing_peg", lambda v: _format_number(v, "x")),
             ("Price/FCF", "price_to_fcf", lambda v: _format_number(v, "x")),
             ("Revenue Growth", "revenue_growth", lambda v: _format_number(v * 100 if v and abs(v) < 10 else v, "%") if v else "N/A"),
             ("Earnings Growth", "earnings_growth", lambda v: _format_number(v * 100 if v and abs(v) < 10 else v, "%") if v else "N/A"),
         ]
+
+        # Only include EV/EBITDA for non-financial companies
+        if not is_financial:
+            val_metrics.insert(6, ("EV/EBITDA", "ev_ebitda", lambda v: _format_number(v, "x")))
+            val_metrics.insert(7, ("EV/Revenue", "ev_revenue", lambda v: _format_number(v, "x")))
 
         for name, key, fmt in val_metrics:
             y = yf_val.get(key)
@@ -470,8 +591,13 @@ def _extract_key_metrics(raw_data: str) -> dict:
     return extracted
 
 
-def _format_metrics_for_prompt(extracted: dict) -> str:
-    """Format extracted metrics into a clear text for the LLM."""
+def _format_metrics_for_prompt(extracted: dict, is_financial: bool = False) -> str:
+    """Format extracted metrics into a clear text for the LLM.
+
+    Args:
+        extracted: Extracted metrics dictionary
+        is_financial: If True, exclude EV/EBITDA from valuation metrics
+    """
     lines = []
     lines.append(f"Company: {extracted['company']} ({extracted['ticker']})")
     lines.append("")
@@ -542,7 +668,7 @@ def _format_metrics_for_prompt(extracted: dict) -> str:
             lines.append(f"- P/B Ratio: {val['pb_ratio']:.2f}")
         if val.get("ps_ratio"):
             lines.append(f"- P/S Ratio: {val['ps_ratio']:.2f}")
-        if val.get("ev_ebitda"):
+        if val.get("ev_ebitda") and not is_financial:
             lines.append(f"- EV/EBITDA: {val['ev_ebitda']:.1f}")
         if val.get("valuation_signal"):
             lines.append(f"- Overall Signal: {val['valuation_signal']}")
@@ -608,6 +734,221 @@ def _format_metrics_for_prompt(extracted: dict) -> str:
     return "\n".join(lines)
 
 
+# New institutional-grade prompt
+ANALYZER_SYSTEM_PROMPT = """You are a senior financial analyst producing institutional-grade SWOT analyses.
+
+## DATA GROUNDING RULES (CRITICAL)
+1. USE ONLY the provided data. Never invent or assume metrics not given.
+2. CITE specific numbers for every finding (e.g., "Net margin: 24.3%", "P/E: 21.3x").
+3. If data is missing, state "Insufficient data" - do NOT fabricate.
+4. Distinguish trailing (historical) vs forward (projected) metrics.
+
+## AVAILABLE DATA BASKETS
+
+### Fundamentals (SEC EDGAR + Yahoo Finance)
+revenue, net_income, net_margin_pct, gross_margin_pct, operating_margin_pct,
+total_assets, total_liabilities, stockholders_equity, free_cash_flow,
+operating_cash_flow, long_term_debt, debt_to_equity, eps
+
+### Valuation (Yahoo Finance)
+market_cap, enterprise_value, trailing_pe, forward_pe, pb_ratio, ps_ratio,
+trailing_peg, price_to_fcf, revenue_growth, earnings_growth
+{ev_ebitda_note}
+
+### Volatility (FRED + Yahoo)
+vix, vxn, beta, historical_volatility, implied_volatility
+
+### Macro (BEA/BLS/FRED)
+gdp_growth, interest_rate, cpi_inflation, unemployment
+
+### News & Sentiment
+News articles with title, source, url
+Sentiment scores from Finnhub and Reddit
+
+## WHAT YOU DO NOT DO
+- Provide buy/sell/hold recommendations
+- Compare to sector/peer benchmarks (data not provided)
+- Speculate beyond provided data
+- Use vague hedge words without quantification"""
+
+
+def _build_revision_prompt(
+    critique_details: dict,
+    company_data: str,
+    current_draft: str,
+    is_financial: bool
+) -> str:
+    """Build revision prompt with conditional focus areas based on failed criteria.
+
+    Args:
+        critique_details: Structured dict from Critic with scores and feedback
+        company_data: Formatted metrics string for reference
+        current_draft: The current SWOT draft to be revised
+        is_financial: Whether the company is a financial institution
+
+    Returns:
+        Complete revision prompt string
+    """
+    scores = critique_details.get("scores", {})
+
+    # Determine which focus areas to include based on failed criteria
+    focus_areas = []
+    if scores.get("evidence_grounding", 10) < 7:
+        focus_areas.append(EVIDENCE_GROUNDING_BLOCK)
+    if scores.get("constraint_compliance", 10) < 6:
+        focus_areas.append(CONSTRAINT_COMPLIANCE_BLOCK)
+    if scores.get("specificity_actionability", 10) < 7:
+        focus_areas.append(SPECIFICITY_BLOCK)
+    if scores.get("strategic_insight", 10) < 7:
+        focus_areas.append(INSIGHT_BLOCK)
+    if scores.get("completeness_balance", 10) < 7:
+        focus_areas.append(COMPLETENESS_BLOCK)
+    if scores.get("clarity_structure", 10) < 7:
+        focus_areas.append(CLARITY_BLOCK)
+
+    # Format critic feedback components
+    deficiencies = critique_details.get("key_deficiencies", [])
+    strengths = critique_details.get("strengths_to_preserve", [])
+    feedback = critique_details.get("actionable_feedback", [])
+
+    # Build deficiencies section
+    deficiencies_text = "\n".join(f"- {d}" for d in deficiencies) if deficiencies else "- None specified"
+
+    # Build strengths section
+    strengths_text = "\n".join(f"- {s}" for s in strengths) if strengths else "- None specified"
+
+    # Build feedback section
+    feedback_text = "\n".join(f"{i+1}. {f}" for i, f in enumerate(feedback)) if feedback else "- None specified"
+
+    # Build focus areas section
+    focus_areas_text = "\n".join(focus_areas) if focus_areas else "Address all deficiencies listed above."
+
+    # Add EV/EBITDA note for financial institutions
+    ev_note = ""
+    if is_financial:
+        ev_note = "\n**Note:** This is a financial institution - EV/EBITDA is excluded from analysis."
+
+    prompt = f"""## REVISION MODE ACTIVATED
+
+You previously generated a SWOT analysis that did not meet quality standards. You are now in revision mode.
+
+### YOUR TASK
+
+1. **Review the Critic's feedback** carefully
+2. **Address each deficiency** listed in priority order
+3. **Preserve strengths** explicitly called out — do not regress on what worked
+4. **Regenerate the complete SWOT** — not a partial patch
+
+### CRITIC FEEDBACK
+
+Status: {critique_details.get('status', 'REJECTED')}
+Weighted Score: {critique_details.get('weighted_score', 0):.1f} / 10
+
+**Key Deficiencies:**
+{deficiencies_text}
+
+**Strengths to Preserve:**
+{strengths_text}
+
+**Actionable Feedback:**
+{feedback_text}
+
+### FOCUS AREAS FOR THIS REVISION
+
+{focus_areas_text}
+
+### REVISION RULES
+
+**DO:**
+- Fix every item in "Key Deficiencies" — these are blocking issues
+- Apply each point in "Actionable Feedback" — these are specific instructions
+- Keep everything listed under "Strengths to Preserve" — do not modify these sections
+- Re-verify all metric citations against the original input data
+- Ensure temporal labels (TTM, FY, Q) are accurate for each metric
+{ev_note}
+
+**DO NOT:**
+- Ignore lower-priority feedback items — address all of them
+- Introduce new metrics not in the original input data
+- Remove content that was working well
+- Add defensive caveats or apologies about the revision
+- Reference the revision process in your output — produce a clean SWOT as if first attempt
+
+### REFERENCE DATA
+
+{company_data}
+
+### CURRENT DRAFT (to revise)
+
+{current_draft}
+
+### OUTPUT INSTRUCTIONS
+
+Produce a complete, revised SWOT analysis following the original template structure.
+
+Do not:
+- Include any preamble about revisions
+- Apologize or explain what you changed
+- Reference the Critic's feedback in your output
+
+Simply output the improved SWOT as a clean, final deliverable."""
+
+    return prompt
+
+
+def _build_analyzer_prompt(company: str, ticker: str, formatted_data: str, is_financial: bool) -> str:
+    """Build analyzer prompt with conditional EV/EBITDA handling."""
+
+    if is_financial:
+        ev_note = "\nNote: EV/EBITDA excluded - not meaningful for financial institutions."
+    else:
+        ev_note = ", ev_ebitda, ev_revenue"
+
+    system = ANALYZER_SYSTEM_PROMPT.format(ev_ebitda_note=ev_note)
+
+    return f"""{system}
+
+=== DATA FOR {company} ({ticker}) ===
+{formatted_data}
+
+=== OUTPUT FORMAT ===
+
+Produce a SWOT analysis with this exact structure:
+
+## Strengths
+For each (3-5 points):
+- **Finding:** [One sentence with specific metric]
+- **Strategic Implication:** [Why this matters]
+- **Durability:** [High/Medium/Low]
+
+## Weaknesses
+For each (3-5 points):
+- **Finding:** [One sentence with specific metric]
+- **Severity:** [Critical/Moderate/Minor]
+- **Trend:** [Improving/Stable/Deteriorating]
+- **Remediation Levers:** [What could improve this]
+
+## Opportunities
+For each (3-5 points):
+- **Catalyst:** [Description with supporting data]
+- **Timing:** [Near-term/Medium-term/Long-term]
+- **Execution Requirements:** [What must happen]
+
+## Threats
+For each (3-5 points):
+- **Risk Factor:** [Description with supporting data]
+- **Probability:** [High/Medium/Low]
+- **Impact:** [Potential magnitude]
+- **Mitigation Options:** [Possible responses]
+
+## Data Quality Notes
+- **Metrics Used:** [List key metrics analyzed]
+- **Data Gaps:** [Any unavailable metrics]
+- **Confidence Level:** [High/Medium/Low]
+
+Every finding MUST cite a specific number from the data."""
+
+
 @traceable(name="Analyzer")
 def analyzer_node(state, workflow_id=None, progress_store=None):
     # Extract workflow_id and progress_store from state (graph invokes with state only)
@@ -628,56 +969,56 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
     user_keys = state.get("user_api_keys", {})
     llm = get_llm_client(user_keys) if user_keys else get_llm_client()
     raw = state["raw_data"]
-    strategy_name = state.get("strategy_focus", "Cost Leadership")
-    strategy_context = get_strategy_context(strategy_name)
     company = state["company_name"]
     ticker = state.get("ticker", "")
 
+    # Extract company profile and detect financial institution
+    company_profile = _extract_company_profile(raw)
+    sector = company_profile.get("sector", "")
+    industry = company_profile.get("industry", "")
+    is_financial = _is_financial_institution(sector, industry, ticker)
+
+    if is_financial:
+        _add_activity_log(workflow_id, progress_store, "analyzer",
+                          f"Financial institution detected - excluding EV/EBITDA")
+
     # Extract and format metrics for better LLM understanding
     extracted = _extract_key_metrics(raw)
-    formatted_data = _format_metrics_for_prompt(extracted)
+    formatted_data = _format_metrics_for_prompt(extracted, is_financial=is_financial)
 
     # Generate detailed data report (shown before SWOT)
-    data_report = _generate_data_report(raw)
+    data_report = _generate_data_report(raw, is_financial=is_financial)
 
-    # Log LLM call start
-    _add_activity_log(workflow_id, progress_store, "analyzer", f"Calling LLM to generate SWOT analysis...")
+    # Detect revision mode: if revision_count > 0 and critique_details exist
+    is_revision = state.get("revision_count", 0) > 0
+    critique_details = state.get("critique_details", {})
 
-    prompt = f"""You are a financial analyst creating a CONCISE SWOT analysis for {company} ({ticker}).
+    if is_revision and critique_details:
+        # REVISION MODE: Use enhanced revision prompt with Critic feedback
+        current_revision = state.get("revision_count", 0) + 1
+        _add_activity_log(workflow_id, progress_store, "analyzer",
+                          f"Revision #{current_revision} in progress...")
 
-CRITICAL INSTRUCTIONS:
-1. ONLY use the data provided below. DO NOT invent or assume any information.
-2. Every point MUST cite specific numbers from the data (e.g., "P/E of 21.3", "Beta of 0.88").
-3. If data is missing for a category, say "Insufficient data" - do NOT make up information.
-4. Focus on what the numbers actually mean for this specific company.
+        prompt = _build_revision_prompt(
+            critique_details=critique_details,
+            company_data=formatted_data,
+            current_draft=state.get("draft_report", ""),
+            is_financial=is_financial
+        )
 
-FORMAT REQUIREMENTS - BE CONCISE:
-- Each bullet point: 1 sentence MAX (under 25 words)
-- 3-5 bullet points per SWOT category
-- Focus on the most impactful insights only
-- NO lengthy explanations or context paragraphs
+        # Update progress with revision info
+        if workflow_id and progress_store:
+            progress_store[workflow_id].update({
+                "current_step": "analyzer",
+                "revision_count": current_revision,
+            })
+    else:
+        # INITIAL MODE: Use standard analyzer prompt
+        _add_activity_log(workflow_id, progress_store, "analyzer",
+                          f"Calling LLM to generate SWOT analysis...")
+        prompt = _build_analyzer_prompt(company, ticker, formatted_data, is_financial)
+        current_revision = 0
 
-Strategic Focus: {strategy_name}
-Context: {strategy_context}
-
-=== ACTUAL DATA FROM FINANCIAL SOURCES ===
-{formatted_data}
-
-Based ONLY on the data above, provide a SWOT analysis in this format:
-
-Strengths:
-- [Single sentence with metric, under 25 words]
-
-Weaknesses:
-- [Single sentence with metric, under 25 words]
-
-Opportunities:
-- [Single sentence citing macro/market data, under 25 words]
-
-Threats:
-- [Single sentence citing risks, under 25 words]
-
-Remember: Every bullet must cite actual data. Keep each point brief and impactful."""
     start_time = time.time()
     response, provider, error, providers_failed = llm.query(prompt, temperature=0)
     elapsed = time.time() - start_time
@@ -704,18 +1045,50 @@ Remember: Every bullet must cite actual data. Keep each point brief and impactfu
             llm_status[provider_name] = "completed"
 
     if error:
-        state["draft_report"] = f"Error generating analysis: {error}"
-        state["provider_used"] = None
-        state["error"] = error  # Signal workflow to abort
-        _add_activity_log(workflow_id, progress_store, "analyzer", f"LLM error: {error}")
-        _add_activity_log(workflow_id, progress_store, "analyzer", "Workflow aborted - all LLM providers unavailable")
+        if is_revision:
+            # REVISION MODE ERROR: Graceful degradation - keep previous draft
+            _add_activity_log(workflow_id, progress_store, "analyzer", f"Revision failed: {error}")
+            if current_revision == 1:
+                _add_activity_log(workflow_id, progress_store, "analyzer",
+                                  "Using initial draft (revision unavailable)")
+            else:
+                _add_activity_log(workflow_id, progress_store, "analyzer",
+                                  f"Using revision #{current_revision - 1} draft (further revision unavailable)")
+            # Don't set error - allow workflow to complete with previous draft
+            state["analyzer_revision_skipped"] = True
+            state["revision_count"] = current_revision
+        else:
+            # INITIAL MODE ERROR: Abort workflow
+            state["draft_report"] = f"Error generating analysis: {error}"
+            state["provider_used"] = None
+            state["error"] = error  # Signal workflow to abort
+            _add_activity_log(workflow_id, progress_store, "analyzer", f"LLM error: {error}")
+            _add_activity_log(workflow_id, progress_store, "analyzer",
+                              "Workflow aborted - all LLM providers unavailable")
     else:
-        # Combine data report (Part 1) with SWOT analysis (Part 2)
-        swot_section = f"## SWOT Analysis\n\n{response}"
-        full_report = f"{data_report}\n{swot_section}"
-        state["draft_report"] = full_report
-        state["data_report"] = data_report  # Store separately for frontend flexibility
-        state["provider_used"] = provider
-        _add_activity_log(workflow_id, progress_store, "analyzer", f"SWOT generated via {provider} ({elapsed:.1f}s)")
+        if is_revision:
+            # REVISION MODE SUCCESS: Update draft with revision
+            state["draft_report"] = response
+            state["provider_used"] = provider
+            state["analyzer_revision_skipped"] = False
+            state["revision_count"] = current_revision
+            _add_activity_log(workflow_id, progress_store, "analyzer",
+                              f"Revision #{current_revision} completed via {provider} ({elapsed:.1f}s)")
+        else:
+            # INITIAL MODE SUCCESS: Combine data report with SWOT analysis
+            swot_section = f"## SWOT Analysis\n\n{response}"
+            full_report = f"{data_report}\n{swot_section}"
+            state["draft_report"] = full_report
+            state["data_report"] = data_report  # Store separately for frontend flexibility
+            state["provider_used"] = provider
+            _add_activity_log(workflow_id, progress_store, "analyzer",
+                              f"SWOT generated via {provider} ({elapsed:.1f}s)")
+
+    # Update progress with final revision count
+    if workflow_id and progress_store:
+        progress_store[workflow_id].update({
+            "revision_count": state.get("revision_count", 0),
+            "score": state.get("score", 0)
+        })
 
     return state

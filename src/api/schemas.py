@@ -30,7 +30,7 @@ class WorkflowStartResponse(BaseModel):
 class WorkflowStatus(BaseModel):
     """Workflow status model."""
     status: str  # 'running', 'completed', 'error'
-    current_step: str  # 'starting', 'Researcher', 'Analyzer', 'Critic', 'Editor'
+    current_step: str  # 'starting', 'Researcher', 'Analyzer', 'Critic'
     revision_count: int
     score: int
 

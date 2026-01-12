@@ -1,5 +1,6 @@
 from typing import Literal
 
+
 def should_continue(state) -> Literal["exit", "retry"]:
     """
     Conditional routing function that determines whether to continue
@@ -7,19 +8,19 @@ def should_continue(state) -> Literal["exit", "retry"]:
 
     Exit conditions:
     - Error set (LLM providers failed - abort immediately)
-    - Editor skipped (LLM failed but using fallback draft - exit gracefully)
+    - Analyzer revision skipped (LLM failed but using fallback draft - exit gracefully)
     - Score >= 7 (good quality)
     - Revision count > 3 (max attempts reached)
 
     Continue conditions:
-    - No error AND No editor skip AND Score < 7 AND Revisions <= 3
+    - No error AND No revision skip AND Score < 7 AND Revisions <= 3
     """
     # Abort immediately if error is set (critical failure)
     if state.get("error"):
         return "exit"
 
-    # Exit gracefully if editor was skipped (using fallback draft)
-    if state.get("editor_skipped"):
+    # Exit gracefully if analyzer revision was skipped (using fallback draft)
+    if state.get("analyzer_revision_skipped"):
         return "exit"
 
     current_score = state.get("score", 0)
