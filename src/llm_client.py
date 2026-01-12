@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 
 # Retry configuration for rate limits
 MAX_RETRIES = 3
-INITIAL_BACKOFF = 3  # seconds (backoffs: 3s, 6s, 12s)
+INITIAL_BACKOFF = 5  # seconds (backoffs: 5s, 10s, 20s)
 
 
 class LLMClient:
@@ -112,7 +112,7 @@ class LLMClient:
                 if e.response is not None and e.response.status_code == 429:
                     last_error = e
                     if attempt < MAX_RETRIES - 1:
-                        backoff = INITIAL_BACKOFF * (2 ** attempt)  # 2s, 4s, 8s
+                        backoff = INITIAL_BACKOFF * (2 ** attempt)  # 5s, 10s, 20s
                         print(f"Rate limited by {provider_name}, retrying in {backoff}s (attempt {attempt + 1}/{MAX_RETRIES})...")
                         time.sleep(backoff)
                         continue
