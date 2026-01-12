@@ -1019,6 +1019,12 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
         prompt = _build_analyzer_prompt(company, ticker, formatted_data, is_financial)
         current_revision = 0
 
+    # In revision mode, add delay before LLM call to avoid rate limits
+    # (Critic just called LLM, so we need to wait)
+    if is_revision:
+        print("Waiting 2s before revision LLM call (rate limit buffer)...")
+        time.sleep(2)
+
     start_time = time.time()
     response, provider, error, providers_failed = llm.query(prompt, temperature=0)
     elapsed = time.time() - start_time

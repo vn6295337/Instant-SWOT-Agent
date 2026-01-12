@@ -6,7 +6,13 @@ Adopts pattern from Enterprise-AI-Gateway for resilient LLM access.
 import os
 import time
 import requests
+from requests.exceptions import HTTPError
 from typing import Optional, Tuple
+
+# Retry configuration for rate limits
+MAX_RETRIES = 3
+INITIAL_BACKOFF = 2  # seconds
+
 
 class LLMClient:
     """LLM client with automatic provider fallback."""
@@ -93,8 +99,35 @@ class LLMClient:
 
         return None, None, f"All LLM providers failed: {'; '.join(errors)}", providers_failed
 
+    def _request_with_retry(self, url: str, headers: dict, payload: dict, provider_name: str) -> requests.Response:
+        """Make HTTP request with exponential backoff retry on 429 rate limit."""
+        last_error = None
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=30)
+                response.raise_for_status()
+                return response
+            except HTTPError as e:
+                if e.response is not None and e.response.status_code == 429:
+                    last_error = e
+                    if attempt < MAX_RETRIES - 1:
+                        backoff = INITIAL_BACKOFF * (2 ** attempt)  # 2s, 4s, 8s
+                        print(f"Rate limited by {provider_name}, retrying in {backoff}s (attempt {attempt + 1}/{MAX_RETRIES})...")
+                        time.sleep(backoff)
+                        continue
+                # Re-raise non-429 errors or final 429
+                raise
+            except Exception:
+                raise
+
+        # Should not reach here, but just in case
+        if last_error:
+            raise last_error
+        raise Exception(f"Request failed after {MAX_RETRIES} attempts")
+
     def _call_provider(self, provider: dict, prompt: str, temperature: float, max_tokens: int) -> Tuple[Optional[str], Optional[str]]:
-        """Call a specific LLM provider."""
+        """Call a specific LLM provider with retry on rate limit."""
         headers = {"Content-Type": "application/json"}
 
         if provider["name"] == "groq":
@@ -105,8 +138,7 @@ class LLMClient:
                 "max_tokens": max_tokens,
                 "temperature": temperature,
             }
-            response = requests.post(provider["url"], headers=headers, json=payload, timeout=30)
-            response.raise_for_status()
+            response = self._request_with_retry(provider["url"], headers, payload, provider["name"])
             data = response.json()
             if data and "choices" in data and data["choices"]:
                 return data["choices"][0]["message"]["content"], None
@@ -121,8 +153,7 @@ class LLMClient:
                     "maxOutputTokens": max_tokens,
                 }
             }
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            response.raise_for_status()
+            response = self._request_with_retry(url, headers, payload, provider["name"])
             data = response.json()
             if data and "candidates" in data and data["candidates"]:
                 first_candidate = data["candidates"][0]
@@ -142,8 +173,7 @@ class LLMClient:
                 "max_tokens": max_tokens,
                 "temperature": temperature,
             }
-            response = requests.post(provider["url"], headers=headers, json=payload, timeout=30)
-            response.raise_for_status()
+            response = self._request_with_retry(provider["url"], headers, payload, provider["name"])
             data = response.json()
             if data and "choices" in data and data["choices"]:
                 return data["choices"][0]["message"]["content"], None
