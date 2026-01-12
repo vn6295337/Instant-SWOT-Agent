@@ -15,8 +15,8 @@ RUN npm ci
 # Copy frontend source code
 COPY frontend/ ./
 
-# Build the frontend
-RUN npm run build
+# Build the frontend (override outDir to build within /frontend)
+RUN npm run build -- --outDir dist
 
 # Stage 2: Python backend with built frontend
 FROM python:3.11-slim
@@ -33,8 +33,8 @@ COPY a2a/ ./a2a/
 COPY data/ ./data/
 # Note: Don't copy .env file - HF Spaces injects secrets as environment variables
 
-# Copy built frontend from stage 1 (vite outputs to ../static which is /static in container)
-COPY --from=frontend-builder /static ./static/
+# Copy built frontend from stage 1
+COPY --from=frontend-builder /frontend/dist ./static/
 
 # Verify static files exist
 RUN ls -la /app/static/ && ls -la /app/static/assets/
