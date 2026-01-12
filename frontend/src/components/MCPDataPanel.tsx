@@ -17,6 +17,70 @@ interface MCPDataPanelProps {
   cik?: string
 }
 
+// Metric name mapping: snake_case → Human Readable
+const METRIC_LABELS: Record<string, string> = {
+  // Fundamentals
+  revenue: 'Revenue',
+  net_income: 'Net Income',
+  gross_profit: 'Gross Profit',
+  operating_income: 'Operating Income',
+  gross_margin_pct: 'Gross Margin %',
+  operating_margin_pct: 'Operating Margin %',
+  net_margin_pct: 'Net Margin %',
+  free_cash_flow: 'Free Cash Flow',
+  operating_cash_flow: 'Operating Cash Flow',
+  total_assets: 'Total Assets',
+  total_liabilities: 'Total Liabilities',
+  stockholders_equity: "Stockholders' Equity",
+  cash: 'Cash',
+  long_term_debt: 'Long-term Debt',
+  net_debt: 'Net Debt',
+  debt_to_equity: 'Debt to Equity',
+  rd_expense: 'R&D Expense',
+  eps: 'EPS',
+
+  // Valuation
+  market_cap: 'Market Cap',
+  enterprise_value: 'Enterprise Value',
+  trailing_pe: 'Trailing P/E',
+  forward_pe: 'Forward P/E',
+  pb_ratio: 'P/B Ratio',
+  ps_ratio: 'P/S Ratio',
+  trailing_peg: 'PEG Ratio',
+  price_to_fcf: 'Price/FCF',
+  ev_ebitda: 'EV/EBITDA',
+  ev_revenue: 'EV/Revenue',
+  revenue_growth: 'Revenue Growth',
+  earnings_growth: 'Earnings Growth',
+
+  // Volatility
+  vix: 'VIX',
+  vxn: 'VXN',
+  beta: 'Beta',
+  historical_volatility: 'Historical Volatility',
+  implied_volatility: 'Implied Volatility',
+
+  // Macro
+  gdp_growth: 'GDP Growth',
+  interest_rate: 'Interest Rate',
+  cpi_inflation: 'CPI Inflation',
+  unemployment: 'Unemployment',
+}
+
+// Convert snake_case metric name to human-readable label
+function formatMetricName(metric: string): string {
+  // Check if we have a predefined label
+  if (METRIC_LABELS[metric]) {
+    return METRIC_LABELS[metric]
+  }
+
+  // Fallback: convert snake_case to Title Case
+  return metric
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
 // Format numbers for display
 function formatValue(value: string | number): string {
   if (value === null || value === undefined) return '—'
@@ -361,7 +425,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
                 {quantitativeRows.map((row, idx) => (
                   <tr key={idx} className="hover:bg-muted/20">
                     <td className="px-3 py-1.5 text-muted-foreground">{idx + 1}</td>
-                    <td className="px-3 py-1.5">{row.metric}</td>
+                    <td className="px-3 py-1.5">{formatMetricName(row.metric)}</td>
                     <td className="px-3 py-1.5 text-right font-medium">{row.value}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{row.dataType}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{row.asOf}</td>
