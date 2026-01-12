@@ -99,12 +99,20 @@ export interface MCPRawData {
   }
 }
 
+export interface QualityNotes {
+  high_confidence: string[]
+  gaps_or_stale: string[]
+  assumptions: string[]
+}
+
 export interface AnalysisResponse {
   company_name: string
+  business_address?: string
   score: number
   revision_count: number
   report_length: number
   critique: string
+  quality_notes?: QualityNotes
   swot_data: {
     strengths: string[]
     weaknesses: string[]

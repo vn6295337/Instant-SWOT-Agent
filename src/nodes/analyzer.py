@@ -563,9 +563,12 @@ def _extract_key_metrics(raw_data: str) -> dict:
         return {"error": "Could not parse raw data"}
 
     metrics = data.get("metrics", {})
+    # Extract company profile for business address
+    company_profile = data.get("company_profile", {})
     extracted = {
         "company": data.get("company_name", "Unknown"),
         "ticker": data.get("ticker", "N/A"),
+        "business_address": company_profile.get("business_address", ""),
         "fundamentals": {},
         "valuation": {},
         "volatility": {},
@@ -1039,6 +1042,48 @@ def _format_reference_log(metric_lookup: dict) -> str:
         parts.append(f"{key}={formatted}")
 
     return ", ".join(parts)
+
+
+def _generate_data_quality_notes(metric_reference: dict) -> dict:
+    """
+    Generate deterministic data quality assessment from metric reference.
+
+    Returns:
+        {
+            "high_confidence": ["revenue", "net_margin", ...],
+            "gaps_or_stale": ["eps (stale: 2024-06-30)", "debt_to_equity (missing)"],
+        }
+    """
+    from datetime import datetime, timedelta
+
+    high_confidence = []
+    gaps_or_stale = []
+    threshold = timedelta(days=30)
+    today = datetime.now()
+
+    for ref_id, entry in metric_reference.items():
+        key = entry.get("key", "unknown")
+        raw_value = entry.get("raw_value")
+        as_of_date = entry.get("as_of_date")
+
+        if raw_value is None:
+            gaps_or_stale.append(f"{key} (missing)")
+        elif as_of_date:
+            try:
+                date = datetime.strptime(as_of_date, "%Y-%m-%d")
+                if today - date > threshold:
+                    gaps_or_stale.append(f"{key} (stale: {as_of_date})")
+                else:
+                    high_confidence.append(key)
+            except ValueError:
+                high_confidence.append(key)
+        else:
+            high_confidence.append(key)
+
+    return {
+        "high_confidence": high_confidence,
+        "gaps_or_stale": gaps_or_stale,
+    }
 
 
 # New institutional-grade prompt

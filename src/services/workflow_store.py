@@ -437,13 +437,27 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
         except Exception as e:
             logger.warning(f"Could not parse raw_data: {e}")
 
+        # Extract business address from company profile
+        company_profile = raw_data_parsed.get("company_profile", {})
+        business_address = company_profile.get("business_address", "")
+
+        # Generate data quality notes from metric reference
+        metric_reference = result.get("metric_reference", {})
+        quality_notes = {"high_confidence": [], "gaps_or_stale": [], "assumptions": []}
+        if metric_reference:
+            from src.nodes.analyzer import _generate_data_quality_notes
+            quality_notes = _generate_data_quality_notes(metric_reference)
+            quality_notes["assumptions"] = []  # LLM assumptions added later if available
+
         # Build final result
         final_result = {
             "company_name": company_name,
+            "business_address": business_address,
             "score": result.get("score", 0),
             "revision_count": result.get("revision_count", 0),
             "report_length": len(result.get("draft_report", "")),
             "critique": result.get("critique", ""),
+            "quality_notes": quality_notes,
             "swot_data": swot_data,
             "raw_report": result.get("draft_report", ""),
             "data_source": result.get("data_source", "unknown"),
