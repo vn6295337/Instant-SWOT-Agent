@@ -196,4 +196,7 @@ Thumbs.db
 frontend/src/stories/assets/
 
 # Draft files
-process_flow.*static/
+process_flow.*
+
+# Built frontend (Docker builds from source)
+static/
