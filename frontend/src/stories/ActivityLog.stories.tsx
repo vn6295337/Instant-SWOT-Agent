@@ -52,8 +52,8 @@ const sampleEntries: ActivityLogEntry[] = [
   },
   {
     timestamp: new Date(Date.now() + 12000).toISOString(),
-    step: 'editor',
-    message: 'Formatting final output',
+    step: 'analyzer',
+    message: 'Revision #1 completed',
   },
   {
     timestamp: new Date(Date.now() + 14000).toISOString(),

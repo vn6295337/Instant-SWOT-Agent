@@ -166,7 +166,7 @@ const Index = () => {
         if (status.provider_used) setLlmProvider(status.provider_used)
 
         // Update completed steps - accumulate rather than recalculate to handle loops
-        const stepOrder = ['input', 'cache', 'researcher', 'analyzer', 'critic', 'editor', 'output']
+        const stepOrder = ['input', 'cache', 'researcher', 'analyzer', 'critic', 'output']
         setCompletedSteps(prev => {
           const newCompleted = new Set(prev)
           const currentIdx = stepOrder.indexOf(status.current_step)
@@ -174,11 +174,6 @@ const Index = () => {
           // Mark all steps before current as completed
           for (let i = 0; i < currentIdx; i++) {
             newCompleted.add(stepOrder[i])
-          }
-
-          // Handle Critic ↔ Editor loop: keep editor completed when looping back to critic
-          if (status.current_step === 'critic' && status.revision_count > 0) {
-            newCompleted.add('editor')
           }
 
           return Array.from(newCompleted)
@@ -211,11 +206,7 @@ const Index = () => {
 
           // Normal flow - all steps completed
           // Set completed steps BEFORE the async fetch to prevent output from glowing prematurely
-          // Only mark 'editor' as completed if revisions actually occurred
-          const finalSteps = status.revision_count > 0
-            ? stepOrder
-            : stepOrder.filter(s => s !== 'editor')
-          setCompletedSteps(finalSteps)
+          setCompletedSteps(stepOrder)
           setCurrentStep('completed')
           const result = await getWorkflowResult(workflowIdToUse)
           setAnalysisResult(result)

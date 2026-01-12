@@ -95,19 +95,10 @@ export const CriticActive: Story = {
   },
 }
 
-export const EditorActive: Story = {
-  args: {
-    currentStep: 'editor',
-    completedSteps: ['input', 'cache', 'researcher', 'analyzer', 'critic'],
-    mcpStatus: completedMcpStatus,
-    llmProvider: 'Claude 3.5',
-  },
-}
-
 export const Completed: Story = {
   args: {
     currentStep: 'output',
-    completedSteps: ['input', 'cache', 'researcher', 'analyzer', 'critic', 'editor', 'output'],
+    completedSteps: ['input', 'cache', 'researcher', 'analyzer', 'critic', 'output'],
     mcpStatus: completedMcpStatus,
     llmProvider: 'Claude 3.5',
   },

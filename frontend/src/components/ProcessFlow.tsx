@@ -6,9 +6,7 @@ import {
   Search,
   Brain,
   MessageSquare,
-  Edit3,
   FileOutput,
-  Server,
   Loader2,
   Network,
   GitBranch,
@@ -58,9 +56,9 @@ const ROW2_Y = ROW1_Y + ROW_GAP
 const ROW3_Y = ROW2_Y + ROW_GAP
 // SVG dimensions
 const SVG_HEIGHT = 218        // Exact content height - scales to fill container
-const NODE_COUNT = 7
+const NODE_COUNT = 6          // Reduced: removed Editor node
 const FLOW_WIDTH = GAP * (NODE_COUNT - 1) + NODE_SIZE
-const SVG_WIDTH = 530         // Wide enough for MCP group with increased spacing
+const SVG_WIDTH = 480         // Narrower now without Editor
 const FLOW_START_X = NODE_SIZE / 2  // Left-aligned with half-node margin
 
 const NODES = {
@@ -69,8 +67,7 @@ const NODES = {
   a2a: { x: FLOW_START_X + GAP * 2, y: ROW1_Y },
   analyzer: { x: FLOW_START_X + GAP * 3, y: ROW1_Y },
   critic: { x: FLOW_START_X + GAP * 4, y: ROW1_Y },
-  editor: { x: FLOW_START_X + GAP * 5, y: ROW1_Y },
-  output: { x: FLOW_START_X + GAP * 6, y: ROW1_Y },
+  output: { x: FLOW_START_X + GAP * 5, y: ROW1_Y },  // Moved up (was editor position)
   exchange: { x: FLOW_START_X, y: ROW2_Y },
   researcher: { x: FLOW_START_X + GAP * 2, y: ROW3_Y },
 }
@@ -86,7 +83,7 @@ const MCP_SERVERS = [
   { id: 'sentiment', label: 'Sentiment', icon: MessageSquare, x: MCP_START_X + MCP_GAP * 5 },
 ]
 
-const AGENTS_CENTER_X = (NODES.analyzer.x + NODES.editor.x) / 2
+const AGENTS_CENTER_X = (NODES.analyzer.x + NODES.critic.x) / 2  // Now between Analyzer and Critic only
 const LLM_GAP = 68  // LLM_WIDTH (64) + 4px spacing
 const LLM_PROVIDERS = [
   { id: 'groq', name: 'Groq', x: AGENTS_CENTER_X - LLM_GAP },
@@ -97,7 +94,7 @@ const LLM_PROVIDERS = [
 const AGENTS_GROUP = {
   x: NODES.analyzer.x - NODE_SIZE / 2 - GROUP_PAD,
   y: ROW1_Y - NODE_SIZE / 2 - GROUP_PAD,
-  width: NODES.editor.x - NODES.analyzer.x + NODE_SIZE + GROUP_PAD * 2,
+  width: NODES.critic.x - NODES.analyzer.x + NODE_SIZE + GROUP_PAD * 2,  // Now only Analyzer + Critic
   height: NODE_SIZE + GROUP_PAD * 2,
 }
 
@@ -133,7 +130,7 @@ function getNodeStatus(
   const normalizedCompleted = completedSteps.map(normalizeStep)
 
   // On cache hit, intermediate steps stay idle (not completed)
-  if (cacheHit && ['researcher', 'analyzer', 'critic', 'editor', 'a2a'].includes(stepId)) {
+  if (cacheHit && ['researcher', 'analyzer', 'critic', 'a2a'].includes(stepId)) {
     return 'idle'
   }
 
@@ -291,9 +288,6 @@ export function ProcessFlow({
   const criticStatus = isAborted
     ? (completedSteps.includes('critic') ? 'completed' : 'idle')
     : getNodeStatus('critic', currentStep, completedSteps, cacheHit)
-  const editorStatus = isAborted
-    ? (completedSteps.includes('editor') ? 'completed' : 'idle')
-    : getNodeStatus('editor', currentStep, completedSteps, cacheHit)
   const outputStatus = isAborted
     ? (completedSteps.includes('output') ? 'completed' : 'idle')
     : getNodeStatus('output', currentStep, completedSteps, cacheHit)
@@ -311,7 +305,6 @@ export function ProcessFlow({
   }, [currentStep, completedSteps, cacheHit])
 
   // Completion halo: workflow completed successfully
-  // Editor is optional (only runs if score < 7), so we check for essential steps + output
   const allDone = useMemo(() => {
     const normalizedCompleted = completedSteps.map(normalizeStep)
     const essentialSteps = ['input', 'cache', 'researcher', 'analyzer', 'critic', 'output']
@@ -368,33 +361,20 @@ export function ProcessFlow({
           <line x1={nodeRight(NODES.analyzer)} y1={ROW1_Y} x2={nodeLeft(NODES.critic)} y2={ROW1_Y}
                 strokeWidth={1.4} markerEnd={`url(#arrow-${conn(analyzerStatus, criticStatus)})`}
                 className={cn("pf-connector", `pf-connector-${conn(analyzerStatus, criticStatus)}`)} />
-          {/* Critic → Editor connector - only lights up when editor actually runs */}
-          <line x1={nodeRight(NODES.critic)} y1={ROW1_Y} x2={nodeLeft(NODES.editor)} y2={ROW1_Y}
-                strokeWidth={1.4} markerEnd={`url(#arrow-${editorStatus === 'executing' || editorStatus === 'completed' ? conn(criticStatus, editorStatus) : 'idle'})`}
-                className={cn("pf-connector", `pf-connector-${editorStatus === 'executing' || editorStatus === 'completed' ? conn(criticStatus, editorStatus) : 'idle'}`)} />
-          {/* Editor → Critic loop (curved path below) - shows when revision loop is active */}
+          {/* Critic → Analyzer revision loop (curved path below) - shows when revision loop is active */}
           <path
-            d={`M ${NODES.editor.x} ${nodeBottom(NODES.editor)}
-                Q ${NODES.editor.x} ${ROW1_Y + 38} ${(NODES.critic.x + NODES.editor.x) / 2} ${ROW1_Y + 38}
-                Q ${NODES.critic.x} ${ROW1_Y + 38} ${NODES.critic.x} ${nodeBottom(NODES.critic)}`}
+            d={`M ${NODES.critic.x} ${nodeBottom(NODES.critic)}
+                Q ${NODES.critic.x} ${ROW1_Y + 38} ${(NODES.analyzer.x + NODES.critic.x) / 2} ${ROW1_Y + 38}
+                Q ${NODES.analyzer.x} ${ROW1_Y + 38} ${NODES.analyzer.x} ${nodeBottom(NODES.analyzer)}`}
             fill="none"
             strokeWidth={1.4}
-            markerEnd={`url(#arrow-${revisionCount > 0 && (editorStatus === 'completed' || criticStatus === 'executing') ? 'completed' : 'idle'})`}
-            className={cn("pf-connector", `pf-connector-${revisionCount > 0 && (editorStatus === 'completed' || criticStatus === 'executing') ? 'completed' : 'idle'}`)}
+            markerEnd={`url(#arrow-${revisionCount > 0 && (analyzerStatus === 'executing' || criticStatus === 'completed') ? 'completed' : 'idle'})`}
+            className={cn("pf-connector", `pf-connector-${revisionCount > 0 && (analyzerStatus === 'executing' || criticStatus === 'completed') ? 'completed' : 'idle'}`)}
           />
-          {/* Editor → Output connector - only lights up when editor ran */}
-          <line x1={nodeRight(NODES.editor)} y1={ROW1_Y} x2={nodeLeft(NODES.output)} y2={ROW1_Y}
-                strokeWidth={1.4} markerEnd={`url(#arrow-${editorStatus === 'completed' ? conn(editorStatus, outputStatus) : 'idle'})`}
-                className={cn("pf-connector", `pf-connector-${editorStatus === 'completed' ? conn(editorStatus, outputStatus) : 'idle'}`)} />
-          {/* Critic → Output direct path (curved above) - shows when editor is skipped */}
-          <path
-            d={`M ${nodeRight(NODES.critic)} ${ROW1_Y - 8}
-                Q ${(NODES.critic.x + NODES.output.x) / 2} ${ROW1_Y - 28} ${nodeLeft(NODES.output)} ${ROW1_Y - 8}`}
-            fill="none"
-            strokeWidth={1.4}
-            markerEnd={`url(#arrow-${editorStatus === 'idle' && criticStatus === 'completed' ? conn(criticStatus, outputStatus) : 'idle'})`}
-            className={cn("pf-connector", `pf-connector-${editorStatus === 'idle' && criticStatus === 'completed' ? conn(criticStatus, outputStatus) : 'idle'}`)}
-          />
+          {/* Critic → Output connector */}
+          <line x1={nodeRight(NODES.critic)} y1={ROW1_Y} x2={nodeLeft(NODES.output)} y2={ROW1_Y}
+                strokeWidth={1.4} markerEnd={`url(#arrow-${conn(criticStatus, outputStatus)})`}
+                className={cn("pf-connector", `pf-connector-${conn(criticStatus, outputStatus)}`)} />
 
           {/* Researcher ↔ MCP block connector (bidirectional) */}
           <line x1={nodeRight(NODES.researcher)} y1={ROW3_Y} x2={MCP_GROUP.x - 2} y2={ROW3_Y}
@@ -420,9 +400,9 @@ export function ProcessFlow({
 
           {/* Agent Group ↔ LLM Group (Orchestration connector) */}
           <line x1={AGENTS_CENTER_X} y1={AGENTS_GROUP.y + AGENTS_GROUP.height + 2} x2={AGENTS_CENTER_X} y2={LLM_GROUP.y - 2}
-                markerStart={`url(#arrow-start-${analyzerStatus === 'executing' || criticStatus === 'executing' || editorStatus === 'executing' ? 'executing' : analyzerStatus === 'completed' ? 'completed' : 'idle'})`}
-                markerEnd={`url(#arrow-${analyzerStatus === 'executing' || criticStatus === 'executing' || editorStatus === 'executing' ? 'executing' : analyzerStatus === 'completed' ? 'completed' : 'idle'})`}
-                className={cn("pf-connector pf-orchestration", `pf-connector-${analyzerStatus === 'executing' || criticStatus === 'executing' || editorStatus === 'executing' ? 'executing' : analyzerStatus === 'completed' ? 'completed' : 'idle'}`)} />
+                markerStart={`url(#arrow-start-${analyzerStatus === 'executing' || criticStatus === 'executing' ? 'executing' : analyzerStatus === 'completed' ? 'completed' : 'idle'})`}
+                markerEnd={`url(#arrow-${analyzerStatus === 'executing' || criticStatus === 'executing' ? 'executing' : analyzerStatus === 'completed' ? 'completed' : 'idle'})`}
+                className={cn("pf-connector pf-orchestration", `pf-connector-${analyzerStatus === 'executing' || criticStatus === 'executing' ? 'executing' : analyzerStatus === 'completed' ? 'completed' : 'idle'}`)} />
 
           {/* Row 1 Nodes - labels above */}
           <SVGNode x={NODES.input.x} y={NODES.input.y} icon={User} label="User Input" status={inputStatus} labelPosition="above" />
@@ -430,7 +410,6 @@ export function ProcessFlow({
           <SVGNode x={NODES.a2a.x} y={NODES.a2a.y} icon={Network} label="A2A client" status={a2aStatus} labelPosition="above" />
           <SVGNode x={NODES.analyzer.x} y={NODES.analyzer.y} icon={Brain} label="Analyzer" label2="Agent" status={analyzerStatus} isAgent labelPosition="above" />
           <SVGNode x={NODES.critic.x} y={NODES.critic.y} icon={MessageSquare} label="Critic" label2="Agent" status={criticStatus} isAgent labelPosition="above" />
-          <SVGNode x={NODES.editor.x} y={NODES.editor.y} icon={Edit3} label="Editor" label2="Agent" status={editorStatus} isAgent labelPosition="above" />
           <SVGNode x={NODES.output.x} y={NODES.output.y} icon={FileOutput} label="Output" status={outputStatus} labelPosition="above" flipIcon />
 
           {/* Row 2 & 3 Nodes - labels below */}
@@ -445,7 +424,7 @@ export function ProcessFlow({
             const isProviderCompleted = providerStatus === 'completed';
 
             // Only show executing if agents are active AND this provider hasn't failed/completed yet
-            const agentsActive = analyzerStatus === 'executing' || criticStatus === 'executing' || editorStatus === 'executing';
+            const agentsActive = analyzerStatus === 'executing' || criticStatus === 'executing';
             const isActive = agentsActive && !isFailed && !isProviderCompleted;
 
             // Only the actually used provider shows as completed (from backend llmStatus)

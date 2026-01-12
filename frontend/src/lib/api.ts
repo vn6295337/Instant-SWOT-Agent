@@ -56,7 +56,7 @@ export interface LLMStatus {
 // Workflow status with activity log and MCP status
 export interface WorkflowStatus {
   status: 'starting' | 'running' | 'completed' | 'error' | 'aborted'
-  current_step: 'input' | 'cache' | 'researcher' | 'analyzer' | 'critic' | 'editor' | 'output' | 'completed'
+  current_step: 'input' | 'cache' | 'researcher' | 'analyzer' | 'critic' | 'output' | 'completed'
   revision_count: number
   score: number
   activity_log: ActivityLogEntry[]
