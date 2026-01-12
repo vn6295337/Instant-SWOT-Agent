@@ -152,6 +152,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
   }, [groupedMetrics])
 
   // Extract news articles from raw_data if available
+  // Actual structure: rawData.metrics.news.items[]
   const newsArticles = React.useMemo(() => {
     if (!rawData) return []
 
@@ -162,26 +163,26 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
       source?: string
     }> = []
 
-    // Navigate to metrics.news - the actual structure from API
+    // Navigate to metrics.news.items - the actual structure from Research Service
     const metricsObj = rawData.metrics as Record<string, unknown> | undefined
     const newsData = metricsObj?.news as Record<string, unknown> | undefined
 
     if (newsData) {
-      // Get results array (from Tavily/NYT/NewsAPI)
-      const results = newsData.results as Array<Record<string, unknown>> | undefined
-      if (results && Array.isArray(results) && results.length > 0) {
-        for (const a of results) {
+      // Get items array (flat list with source field)
+      const items = newsData.items as Array<Record<string, unknown>> | undefined
+      if (items && Array.isArray(items) && items.length > 0) {
+        for (const a of items) {
           articles.push({
             title: String(a.title || a.content || 'News article'),
-            url: String(a.url || a.link || '#'),
-            date: a.published_date ? String(a.published_date) : undefined,
+            url: String(a.url || '#'),
+            date: a.datetime ? String(a.datetime) : undefined,
             source: a.source ? String(a.source) : 'Tavily'
           })
         }
       }
     }
 
-    // Fallback: check rawData.news directly
+    // Fallback: check rawData.news directly (legacy format)
     if (articles.length === 0 && rawData.news && Array.isArray(rawData.news)) {
       for (const a of rawData.news.slice(0, 10)) {
         articles.push({
@@ -197,10 +198,11 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
   }, [rawData])
 
   // Extract sentiment items (individual news/posts from Finnhub and Reddit)
+  // Actual structure: rawData.metrics.sentiment.items[] with source field for filtering
   const sentimentItems = React.useMemo(() => {
     if (!rawData) return []
 
-    const items: Array<{
+    const results: Array<{
       title: string
       url: string
       date?: string
@@ -208,48 +210,27 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
       subreddit?: string
     }> = []
 
-    // Navigate to metrics.sentiment
+    // Navigate to metrics.sentiment.items - flat array with source field
     const metricsObj = rawData.metrics as Record<string, unknown> | undefined
     const sentimentData = metricsObj?.sentiment as Record<string, unknown> | undefined
 
     if (!sentimentData) return []
 
-    const sentMetrics = sentimentData.metrics as Record<string, unknown> | undefined
+    const items = sentimentData.items as Array<Record<string, unknown>> | undefined
+    if (!items || !Array.isArray(items)) return []
 
-    // Finnhub news items
-    if (sentMetrics?.finnhub) {
-      const finnhub = sentMetrics.finnhub as Record<string, unknown>
-      const news = finnhub.news as Array<Record<string, unknown>> | undefined
-      if (news && Array.isArray(news)) {
-        for (const n of news) {
-          items.push({
-            title: String(n.headline || n.title || 'Finnhub article'),
-            url: String(n.url || '#'),
-            date: n.datetime ? String(n.datetime) : undefined,
-            source: 'Finnhub'
-          })
-        }
-      }
+    for (const item of items) {
+      const source = String(item.source || 'Unknown')
+      results.push({
+        title: String(item.title || item.content || `${source} item`),
+        url: String(item.url || '#'),
+        date: item.datetime ? String(item.datetime) : undefined,
+        source,
+        subreddit: item.subreddit ? String(item.subreddit) : undefined
+      })
     }
 
-    // Reddit posts
-    if (sentMetrics?.reddit) {
-      const reddit = sentMetrics.reddit as Record<string, unknown>
-      const posts = reddit.posts as Array<Record<string, unknown>> | undefined
-      if (posts && Array.isArray(posts)) {
-        for (const p of posts) {
-          items.push({
-            title: String(p.title || 'Reddit post'),
-            url: String(p.url || p.permalink || '#'),
-            date: p.created_utc ? new Date(Number(p.created_utc) * 1000).toISOString().split('T')[0] : undefined,
-            source: 'Reddit',
-            subreddit: p.subreddit ? String(p.subreddit) : undefined
-          })
-        }
-      }
-    }
-
-    return items
+    return results
   }, [rawData])
 
   // Build qualitative rows for table display (news + sentiment)
