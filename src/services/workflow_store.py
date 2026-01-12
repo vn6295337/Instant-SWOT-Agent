@@ -97,6 +97,139 @@ def update_mcp_status(workflow_id: str, source: str, status: str):
             WORKFLOWS[workflow_id]["mcp_status"][source] = status
 
 
+def _extract_metrics_from_raw_data(raw_data: dict) -> list:
+    """Extract metrics array from raw_data for cached analysis display.
+
+    Parses the multi_source structure to extract quantitative metrics
+    in the same format as add_metric() produces.
+
+    Args:
+        raw_data: Parsed raw_data dict from cached analysis
+
+    Returns:
+        List of metric entries with source, metric, value, and temporal fields
+    """
+    metrics = []
+    timestamp = datetime.utcnow().isoformat() + "Z"
+
+    multi_source = raw_data.get("multi_source", {})
+
+    # Extract fundamentals from SEC EDGAR and Yahoo Finance
+    fin_all = multi_source.get("fundamentals_all", {})
+    sec_data = fin_all.get("sec_edgar", {}).get("data", {})
+    yf_fund = fin_all.get("yahoo_finance", {}).get("data", {})
+
+    # Fundamentals metrics to extract
+    fin_metrics = [
+        "revenue", "net_income", "gross_profit", "operating_income",
+        "gross_margin_pct", "operating_margin_pct", "net_margin_pct",
+        "free_cash_flow", "operating_cash_flow", "total_assets",
+        "total_liabilities", "stockholders_equity", "cash",
+        "long_term_debt", "net_debt", "rd_expense", "eps", "debt_to_equity"
+    ]
+
+    for metric_name in fin_metrics:
+        # Prefer SEC EDGAR data, fall back to Yahoo Finance
+        metric_data = sec_data.get(metric_name) or yf_fund.get(metric_name)
+        if metric_data is not None:
+            entry = {
+                "timestamp": timestamp,
+                "source": "fundamentals",
+                "metric": metric_name,
+            }
+            if isinstance(metric_data, dict):
+                entry["value"] = metric_data.get("value")
+                if metric_data.get("end_date"):
+                    entry["end_date"] = metric_data["end_date"]
+                if metric_data.get("fiscal_year"):
+                    entry["fiscal_year"] = metric_data["fiscal_year"]
+                if metric_data.get("form"):
+                    entry["form"] = metric_data["form"]
+            else:
+                entry["value"] = metric_data
+
+            if entry.get("value") is not None:
+                metrics.append(entry)
+
+    # Extract valuation metrics from Yahoo Finance
+    val_all = multi_source.get("valuation_all", {})
+    yf_val = val_all.get("yahoo_finance", {}).get("data", {})
+
+    val_metrics = [
+        "market_cap", "enterprise_value", "trailing_pe", "forward_pe",
+        "pb_ratio", "ps_ratio", "trailing_peg", "price_to_fcf",
+        "ev_ebitda", "ev_revenue", "revenue_growth", "earnings_growth"
+    ]
+
+    for metric_name in val_metrics:
+        metric_data = yf_val.get(metric_name)
+        if metric_data is not None:
+            value = metric_data.get("value") if isinstance(metric_data, dict) else metric_data
+            if value is not None:
+                metrics.append({
+                    "timestamp": timestamp,
+                    "source": "valuation",
+                    "metric": metric_name,
+                    "value": value
+                })
+
+    # Extract volatility metrics
+    vol_all = multi_source.get("volatility_all", {})
+    ctx = vol_all.get("market_volatility_context", {})
+    yf_vol = vol_all.get("yahoo_finance", {}).get("data", {})
+
+    # VIX and VXN from market context
+    for vol_metric in ["vix", "vxn"]:
+        vol_data = ctx.get(vol_metric, {})
+        if vol_data.get("value") is not None:
+            entry = {
+                "timestamp": timestamp,
+                "source": "volatility",
+                "metric": vol_metric,
+                "value": vol_data["value"]
+            }
+            if vol_data.get("date"):
+                entry["end_date"] = vol_data["date"]
+            metrics.append(entry)
+
+    # Beta and volatility from Yahoo Finance
+    for vol_metric in ["beta", "historical_volatility", "implied_volatility"]:
+        metric_data = yf_vol.get(vol_metric)
+        if metric_data is not None:
+            value = metric_data.get("value") if isinstance(metric_data, dict) else metric_data
+            if value is not None:
+                metrics.append({
+                    "timestamp": timestamp,
+                    "source": "volatility",
+                    "metric": vol_metric,
+                    "value": value
+                })
+
+    # Extract macro indicators
+    macro_all = multi_source.get("macro_all", {})
+    bea_bls = macro_all.get("bea_bls", {}).get("data", {})
+    fred = macro_all.get("fred", {}).get("data", {})
+
+    macro_metrics = ["gdp_growth", "cpi_inflation", "unemployment", "interest_rate"]
+
+    for metric_name in macro_metrics:
+        # Prefer BEA/BLS, fall back to FRED
+        metric_data = bea_bls.get(metric_name) or fred.get(metric_name)
+        if metric_data is not None and isinstance(metric_data, dict):
+            if metric_data.get("value") is not None:
+                entry = {
+                    "timestamp": timestamp,
+                    "source": "macro",
+                    "metric": metric_name,
+                    "value": metric_data["value"]
+                }
+                if metric_data.get("date"):
+                    entry["end_date"] = metric_data["date"]
+                metrics.append(entry)
+
+    return metrics
+
+
 def run_workflow_background(workflow_id: str, company_name: str, ticker: str, strategy_focus: str,
                             skip_cache: bool = False, user_api_keys: dict = None):
     """Execute workflow in background thread with progress tracking."""
@@ -115,12 +248,18 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
             # Cache hit - use cached result
             add_activity_log(workflow_id, "cache", f"Cache HIT - {ticker} analysis found in history")
             add_activity_log(workflow_id, "cache", f"Returning cached result (skipping agentic workflow)")
+
+            # Extract metrics from cached raw_data for frontend display
+            cached_raw_data = cached.get("raw_data", {})
+            cached_metrics = _extract_metrics_from_raw_data(cached_raw_data)
+
             WORKFLOWS[workflow_id].update({
                 "status": "completed",
                 "current_step": "completed",
                 "revision_count": cached.get("revision_count", 0),
                 "score": cached.get("score", 0),
                 "data_source": "cache",
+                "metrics": cached_metrics,  # Populate metrics for frontend
                 "result": {
                     "company_name": cached.get("company_name", company_name),
                     "score": cached.get("score", 0),
