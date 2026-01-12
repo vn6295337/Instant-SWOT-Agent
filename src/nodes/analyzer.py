@@ -1465,8 +1465,8 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
     # In revision mode, add delay before LLM call to avoid rate limits
     # (Critic just called LLM, so we need to wait)
     if is_revision:
-        print("Waiting 5s before revision LLM call (rate limit buffer)...")
-        time.sleep(5)
+        print("Waiting 10s before revision LLM call (rate limit buffer)...")
+        time.sleep(10)
 
     start_time = time.time()
     response, provider, error, providers_failed = llm.query(prompt, temperature=0)
