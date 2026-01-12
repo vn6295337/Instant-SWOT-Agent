@@ -1058,6 +1058,7 @@ Weighted Score: {critique_details.get('weighted_score', 0):.1f} / 10
 - Apply each point in "Actionable Feedback" — these are specific instructions
 - Keep everything listed under "Strengths to Preserve" — do not modify these sections
 - **Use EXACT metric values from the METRIC REFERENCE TABLE** — copy numbers verbatim
+- **Include [M##] citation after every metric value** — e.g., "$394.3B [M01]"
 - Include the 'as of' date when citing temporal metrics
 {ev_note}
 
@@ -1065,6 +1066,7 @@ Weighted Score: {critique_details.get('weighted_score', 0):.1f} / 10
 - Ignore lower-priority feedback items — address all of them
 - Introduce new metrics not in the original input data
 - **Round, estimate, or approximate any numbers** — use exact values only
+- **Omit [M##] citations** — they are required for automatic verification
 - Remove content that was working well
 - Add defensive caveats or apologies about the revision
 - Reference the revision process in your output — produce a clean SWOT as if first attempt
@@ -1132,26 +1134,26 @@ Produce a SWOT analysis with this exact structure:
 
 ## Strengths
 For each (3-5 points):
-- **Finding:** [One sentence with specific metric from the METRIC REFERENCE TABLE]
+- **Finding:** [One sentence with metric value and citation, e.g., "Revenue of $394.3B [M01] shows..."]
 - **Strategic Implication:** [Why this matters]
 - **Durability:** [High/Medium/Low]
 
 ## Weaknesses
 For each (3-5 points):
-- **Finding:** [One sentence with specific metric from the METRIC REFERENCE TABLE]
+- **Finding:** [One sentence with metric value and citation, e.g., "Debt/equity of 1.87 [M04] indicates..."]
 - **Severity:** [Critical/Moderate/Minor]
 - **Trend:** [Improving/Stable/Deteriorating]
 - **Remediation Levers:** [What could improve this]
 
 ## Opportunities
 For each (3-5 points):
-- **Catalyst:** [Description with supporting data]
+- **Catalyst:** [Description with metric citations where applicable]
 - **Timing:** [Near-term/Medium-term/Long-term]
 - **Execution Requirements:** [What must happen]
 
 ## Threats
 For each (3-5 points):
-- **Risk Factor:** [Description with supporting data]
+- **Risk Factor:** [Description with metric citations where applicable]
 - **Probability:** [High/Medium/Low]
 - **Impact:** [Potential magnitude]
 - **Mitigation Options:** [Possible responses]
@@ -1161,7 +1163,11 @@ For each (3-5 points):
 - **Data Gaps:** [Any unavailable metrics]
 - **Confidence Level:** [High/Medium/Low]
 
-CRITICAL: Every numeric finding MUST use the EXACT value from the METRIC REFERENCE TABLE above. Do NOT round or estimate."""
+CRITICAL CITATION REQUIREMENTS:
+1. Every numeric finding MUST include the reference ID in brackets: value [M##]
+2. Use EXACT values from the METRIC REFERENCE TABLE - do NOT round or estimate
+3. Example: "Revenue of $394,328,000,000 [M01] demonstrates strong market position"
+4. Citations will be automatically verified - mismatches cause rejection"""
 
     return prompt, metric_lookup, ref_hash
 

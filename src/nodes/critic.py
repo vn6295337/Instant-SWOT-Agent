@@ -3,6 +3,10 @@ from langsmith import traceable
 import json
 import time
 
+# Layer 4: Deterministic numeric validation
+from src.utils.numeric_validator import validate_numeric_accuracy
+from src.nodes.analyzer import _verify_reference_integrity
+
 
 def _add_activity_log(workflow_id, progress_store, step, message):
     """Helper to add activity log entry."""
@@ -352,6 +356,55 @@ def critic_node(state, workflow_id=None, progress_store=None):
     status = result["status"]
     weighted_score = result["weighted_score"]
     scores = result["scores"]
+
+    # ============================================================
+    # LAYER 4: Deterministic Numeric Validation
+    # ============================================================
+    metric_ref = state.get("metric_reference", {})
+    ref_hash = state.get("metric_reference_hash", "")
+
+    if metric_ref and ref_hash:
+        # Verify integrity before using
+        if _verify_reference_integrity(metric_ref, ref_hash):
+            mismatches = validate_numeric_accuracy(report, metric_ref)
+            if mismatches:
+                _add_activity_log(workflow_id, progress_store, "critic",
+                                  f"Numeric validation: {len(mismatches)} mismatch(es) detected")
+
+                # Ensure hallucinations_detected exists
+                if "hallucinations_detected" not in result:
+                    result["hallucinations_detected"] = []
+                result["hallucinations_detected"].extend(mismatches)
+
+                # Cap evidence_grounding score
+                if scores.get("evidence_grounding", 0) > 4:
+                    scores["evidence_grounding"] = 4
+                    if "hard_floor_violations" not in result:
+                        result["hard_floor_violations"] = []
+                    result["hard_floor_violations"].append(
+                        "Numeric mismatch detected - evidence_grounding capped at 4"
+                    )
+
+                # Add specific feedback
+                if "actionable_feedback" not in result:
+                    result["actionable_feedback"] = []
+                result["actionable_feedback"].insert(0,
+                    f"Fix {len(mismatches)} numeric mismatch(es) - use exact values with [M##] citations from reference table"
+                )
+
+                # Recalculate weighted score with capped evidence_grounding
+                weighted_score = calculate_weighted_score(scores)
+                result["weighted_score"] = weighted_score
+
+                # Force rejection if numeric mismatches
+                status = "REJECTED"
+                result["status"] = status
+            else:
+                _add_activity_log(workflow_id, progress_store, "critic",
+                                  "Numeric validation: all citations verified")
+        else:
+            _add_activity_log(workflow_id, progress_store, "critic",
+                              "Warning: metric reference integrity check failed - skipping numeric validation")
 
     # Handle ESCALATE if max iterations reached
     if iteration > 3 and status == "REJECTED":
