@@ -22,3 +22,6 @@ class AgentState(TypedDict):
     progress_store: Optional[Any]  # Reference to WORKFLOWS dict
     # Error handling - abort workflow on critical failures
     error: Optional[str]  # Set when LLM providers fail, causes workflow to abort
+    # Metric reference for hallucination prevention (Layer 1)
+    metric_reference: Optional[dict]  # {M01: {key, raw_value, formatted, as_of_date}, ...}
+    metric_reference_hash: Optional[str]  # SHA256 hash for integrity verification

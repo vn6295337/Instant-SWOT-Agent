@@ -734,6 +734,167 @@ def _format_metrics_for_prompt(extracted: dict, is_financial: bool = False) -> s
     return "\n".join(lines)
 
 
+# ============================================================
+# METRIC REFERENCE TABLE - For Hallucination Prevention (Layer 1)
+# ============================================================
+
+import hashlib
+
+
+def _format_metric_for_reference(key: str, value, temporal_info: dict = None) -> tuple:
+    """
+    Format a single metric for the reference table with exact as-of date.
+
+    Returns:
+        tuple: (formatted_string, as_of_date)
+    """
+    if value is None:
+        return None, None
+
+    # Format value based on metric type
+    if key in ("revenue", "net_income", "free_cash_flow", "market_cap", "enterprise_value",
+               "total_assets", "total_liabilities", "stockholders_equity", "operating_cash_flow"):
+        formatted = f"${value:,.0f}"
+    elif key in ("net_margin", "gross_margin", "operating_margin", "gdp_growth",
+                 "inflation", "unemployment", "historical_volatility", "revenue_cagr_3yr"):
+        formatted = f"{value:.1f}%"
+    elif key in ("interest_rate",):
+        formatted = f"{value:.2f}%"
+    elif key in ("pe_trailing", "pe_forward", "ps_ratio", "ev_ebitda", "vix"):
+        formatted = f"{value:.1f}"
+    elif key in ("pb_ratio", "debt_to_equity", "beta"):
+        formatted = f"{value:.2f}"
+    elif key in ("eps",):
+        formatted = f"${value:.2f}"
+    elif key in ("composite_score",):
+        formatted = f"{value:.1f}"
+    else:
+        # Default formatting for unknown metrics
+        if isinstance(value, float):
+            formatted = f"{value:.2f}"
+        else:
+            formatted = str(value)
+
+    # Extract actual date (not fiscal period label)
+    as_of_date = None
+    if temporal_info and isinstance(temporal_info, dict):
+        as_of_date = temporal_info.get("end_date")  # e.g., "2024-09-28"
+
+    if as_of_date:
+        formatted = f"{formatted} (as of {as_of_date})"
+
+    return formatted, as_of_date
+
+
+def _generate_metric_reference_table(extracted: dict, is_financial: bool = False) -> tuple:
+    """
+    Generate an immutable metric reference table for LLM grounding.
+
+    Args:
+        extracted: Extracted metrics dictionary from _extract_key_metrics()
+        is_financial: If True, exclude EV/EBITDA
+
+    Returns:
+        tuple: (table_string, metric_lookup_dict)
+    """
+    lines = [
+        "=" * 60,
+        "METRIC REFERENCE TABLE - COPY VALUES EXACTLY AS SHOWN",
+        "=" * 60,
+        "",
+        "CRITICAL INSTRUCTION:",
+        "- Copy metric values EXACTLY as shown (including $, %, decimals)",
+        "- Do NOT round, estimate, or approximate numbers",
+        "- Do NOT invent metrics not listed below",
+        "- Include the 'as of' date when citing temporal metrics",
+        "",
+    ]
+
+    lookup = {}
+    mid = 1
+
+    # Define categories and their metric keys
+    categories = [
+        ("FUNDAMENTALS", "fundamentals", [
+            "revenue", "net_income", "net_margin", "gross_margin", "operating_margin",
+            "eps", "debt_to_equity", "free_cash_flow", "revenue_cagr_3yr"
+        ]),
+        ("VALUATION", "valuation", [
+            "pe_trailing", "pe_forward", "pb_ratio", "ps_ratio", "ev_ebitda"
+        ]),
+        ("VOLATILITY", "volatility", [
+            "beta", "vix", "historical_volatility"
+        ]),
+        ("MACRO", "macro", [
+            "gdp_growth", "interest_rate", "inflation", "unemployment"
+        ]),
+    ]
+
+    for label, cat_key, metric_keys in categories:
+        data = extracted.get(cat_key, {})
+        if not data:
+            continue
+
+        category_lines = []
+
+        for metric_key in metric_keys:
+            metric_val = data.get(metric_key)
+            if metric_val is None:
+                continue
+
+            # Skip EV/EBITDA for financial institutions
+            if is_financial and metric_key == "ev_ebitda":
+                continue
+
+            # Handle temporal metrics (dict with value and end_date)
+            if isinstance(metric_val, dict) and metric_val.get("value") is not None:
+                raw_value = metric_val["value"]
+                formatted, as_of_date = _format_metric_for_reference(
+                    metric_key, raw_value, metric_val
+                )
+            elif isinstance(metric_val, (int, float)):
+                raw_value = metric_val
+                formatted, as_of_date = _format_metric_for_reference(metric_key, raw_value)
+            else:
+                continue  # Skip non-numeric
+
+            if formatted:
+                ref_id = f"M{mid:02d}"
+                category_lines.append(f"  {ref_id}: {metric_key} = {formatted}")
+                lookup[ref_id] = {
+                    "key": metric_key,
+                    "raw_value": raw_value,
+                    "formatted": formatted,
+                    "as_of_date": as_of_date,
+                    "category": cat_key
+                }
+                mid += 1
+
+        if category_lines:
+            lines.append(f"[{label}]")
+            lines.extend(category_lines)
+            lines.append("")
+
+    lines.append("=" * 60)
+    lines.append("")
+
+    return "\n".join(lines), lookup
+
+
+def _compute_reference_hash(metric_lookup: dict) -> str:
+    """Compute SHA256 hash of metric lookup for integrity verification."""
+    # Sort keys for deterministic serialization
+    serialized = json.dumps(metric_lookup, sort_keys=True, default=str)
+    return hashlib.sha256(serialized.encode()).hexdigest()
+
+
+def _verify_reference_integrity(metric_lookup: dict, stored_hash: str) -> bool:
+    """Verify metric lookup hasn't been corrupted."""
+    if not metric_lookup or not stored_hash:
+        return False
+    return _compute_reference_hash(metric_lookup) == stored_hash
+
+
 # New institutional-grade prompt
 ANALYZER_SYSTEM_PROMPT = """You are a senior financial analyst producing institutional-grade SWOT analyses.
 
@@ -776,7 +937,8 @@ def _build_revision_prompt(
     critique_details: dict,
     company_data: str,
     current_draft: str,
-    is_financial: bool
+    is_financial: bool,
+    extracted: dict = None
 ) -> str:
     """Build revision prompt with conditional focus areas based on failed criteria.
 
@@ -785,10 +947,15 @@ def _build_revision_prompt(
         company_data: Formatted metrics string for reference
         current_draft: The current SWOT draft to be revised
         is_financial: Whether the company is a financial institution
+        extracted: Extracted metrics dict for reference table generation
 
     Returns:
         Complete revision prompt string
     """
+    # Generate metric reference table for revision (same as initial mode)
+    reference_table = ""
+    if extracted:
+        reference_table, _ = _generate_metric_reference_table(extracted, is_financial)
     scores = critique_details.get("scores", {})
 
     # Determine which focus areas to include based on failed criteria
@@ -828,7 +995,7 @@ def _build_revision_prompt(
     if is_financial:
         ev_note = "\n**Note:** This is a financial institution - EV/EBITDA is excluded from analysis."
 
-    prompt = f"""## REVISION MODE ACTIVATED
+    prompt = f"""{reference_table}## REVISION MODE ACTIVATED
 
 You previously generated a SWOT analysis that did not meet quality standards. You are now in revision mode.
 
@@ -838,6 +1005,7 @@ You previously generated a SWOT analysis that did not meet quality standards. Yo
 2. **Address each deficiency** listed in priority order
 3. **Preserve strengths** explicitly called out — do not regress on what worked
 4. **Regenerate the complete SWOT** — not a partial patch
+5. **Use EXACT values from the METRIC REFERENCE TABLE above** — do not round or estimate
 
 ### CRITIC FEEDBACK
 
@@ -863,13 +1031,14 @@ Weighted Score: {critique_details.get('weighted_score', 0):.1f} / 10
 - Fix every item in "Key Deficiencies" — these are blocking issues
 - Apply each point in "Actionable Feedback" — these are specific instructions
 - Keep everything listed under "Strengths to Preserve" — do not modify these sections
-- Re-verify all metric citations against the original input data
-- Ensure temporal labels (TTM, FY, Q) are accurate for each metric
+- **Use EXACT metric values from the METRIC REFERENCE TABLE** — copy numbers verbatim
+- Include the 'as of' date when citing temporal metrics
 {ev_note}
 
 **DO NOT:**
 - Ignore lower-priority feedback items — address all of them
 - Introduce new metrics not in the original input data
+- **Round, estimate, or approximate any numbers** — use exact values only
 - Remove content that was working well
 - Add defensive caveats or apologies about the revision
 - Reference the revision process in your output — produce a clean SWOT as if first attempt
@@ -896,8 +1065,28 @@ Simply output the improved SWOT as a clean, final deliverable."""
     return prompt
 
 
-def _build_analyzer_prompt(company: str, ticker: str, formatted_data: str, is_financial: bool) -> str:
-    """Build analyzer prompt with conditional EV/EBITDA handling."""
+def _build_analyzer_prompt(company: str, ticker: str, formatted_data: str,
+                           is_financial: bool, extracted: dict = None) -> tuple:
+    """Build analyzer prompt with metric reference table for hallucination prevention.
+
+    Args:
+        company: Company name
+        ticker: Stock ticker
+        formatted_data: Formatted metrics text
+        is_financial: If True, exclude EV/EBITDA
+        extracted: Extracted metrics dict (for reference table generation)
+
+    Returns:
+        tuple: (prompt_string, metric_lookup_dict, reference_hash)
+    """
+    # Generate metric reference table if extracted data is available
+    reference_table = ""
+    metric_lookup = {}
+    ref_hash = ""
+
+    if extracted:
+        reference_table, metric_lookup = _generate_metric_reference_table(extracted, is_financial)
+        ref_hash = _compute_reference_hash(metric_lookup)
 
     if is_financial:
         ev_note = "\nNote: EV/EBITDA excluded - not meaningful for financial institutions."
@@ -906,7 +1095,7 @@ def _build_analyzer_prompt(company: str, ticker: str, formatted_data: str, is_fi
 
     system = ANALYZER_SYSTEM_PROMPT.format(ev_ebitda_note=ev_note)
 
-    return f"""{system}
+    prompt = f"""{reference_table}{system}
 
 === DATA FOR {company} ({ticker}) ===
 {formatted_data}
@@ -917,13 +1106,13 @@ Produce a SWOT analysis with this exact structure:
 
 ## Strengths
 For each (3-5 points):
-- **Finding:** [One sentence with specific metric]
+- **Finding:** [One sentence with specific metric from the METRIC REFERENCE TABLE]
 - **Strategic Implication:** [Why this matters]
 - **Durability:** [High/Medium/Low]
 
 ## Weaknesses
 For each (3-5 points):
-- **Finding:** [One sentence with specific metric]
+- **Finding:** [One sentence with specific metric from the METRIC REFERENCE TABLE]
 - **Severity:** [Critical/Moderate/Minor]
 - **Trend:** [Improving/Stable/Deteriorating]
 - **Remediation Levers:** [What could improve this]
@@ -946,7 +1135,9 @@ For each (3-5 points):
 - **Data Gaps:** [Any unavailable metrics]
 - **Confidence Level:** [High/Medium/Low]
 
-Every finding MUST cite a specific number from the data."""
+CRITICAL: Every numeric finding MUST use the EXACT value from the METRIC REFERENCE TABLE above. Do NOT round or estimate."""
+
+    return prompt, metric_lookup, ref_hash
 
 
 @traceable(name="Analyzer")
@@ -1004,7 +1195,8 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
             critique_details=critique_details,
             company_data=formatted_data,
             current_draft=state.get("draft_report", ""),
-            is_financial=is_financial
+            is_financial=is_financial,
+            extracted=extracted
         )
 
         # Update progress with revision info
@@ -1017,7 +1209,12 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
         # INITIAL MODE: Use standard analyzer prompt
         _add_activity_log(workflow_id, progress_store, "analyzer",
                           f"Calling LLM to generate SWOT analysis...")
-        prompt = _build_analyzer_prompt(company, ticker, formatted_data, is_financial)
+        prompt, metric_lookup, ref_hash = _build_analyzer_prompt(
+            company, ticker, formatted_data, is_financial, extracted
+        )
+        # Store metric reference for validation (Layer 1 hallucination prevention)
+        state["metric_reference"] = metric_lookup
+        state["metric_reference_hash"] = ref_hash
         current_revision = 0
 
     # In revision mode, add delay before LLM call to avoid rate limits
