@@ -287,8 +287,13 @@ const Index = () => {
     setTimeout(async () => {
       setCompletedSteps(['input', 'cache', 'output'])
       setCurrentStep('completed')
-      const result = await getWorkflowResult(pendingCacheWorkflowId)
+      // Fetch both result and status (for metrics)
+      const [result, status] = await Promise.all([
+        getWorkflowResult(pendingCacheWorkflowId),
+        getWorkflowStatus(pendingCacheWorkflowId)
+      ])
       setAnalysisResult(result)
+      setMetrics(status.metrics || [])
       setIsLoading(false)
       setShowResults(true)
       setMainTab("results")
