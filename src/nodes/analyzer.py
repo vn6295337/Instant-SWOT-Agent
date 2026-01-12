@@ -895,6 +895,32 @@ def _verify_reference_integrity(metric_lookup: dict, stored_hash: str) -> bool:
     return _compute_reference_hash(metric_lookup) == stored_hash
 
 
+def _format_reference_log(metric_lookup: dict) -> str:
+    """Format metric reference as compact single-line log for activity display."""
+    if not metric_lookup:
+        return "No metrics extracted"
+
+    parts = []
+    for ref_id in sorted(metric_lookup.keys()):
+        entry = metric_lookup[ref_id]
+        key = entry.get("key", "unknown")
+        formatted = entry.get("formatted", "N/A")
+        # Shorten large numbers for compact display
+        if "$" in formatted and len(formatted) > 15:
+            # Convert $394,328,000,000 to $394.3B
+            raw = entry.get("raw_value", 0)
+            if isinstance(raw, (int, float)) and abs(raw) >= 1e9:
+                formatted = f"${raw/1e9:.1f}B"
+            elif isinstance(raw, (int, float)) and abs(raw) >= 1e6:
+                formatted = f"${raw/1e6:.0f}M"
+        # Remove "as of" date for compact display
+        if " (as of " in formatted:
+            formatted = formatted.split(" (as of ")[0]
+        parts.append(f"{key}={formatted}")
+
+    return ", ".join(parts)
+
+
 # New institutional-grade prompt
 ANALYZER_SYSTEM_PROMPT = """You are a senior financial analyst producing institutional-grade SWOT analyses.
 
@@ -1215,6 +1241,10 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
         # Store metric reference for validation (Layer 1 hallucination prevention)
         state["metric_reference"] = metric_lookup
         state["metric_reference_hash"] = ref_hash
+        # Log reference values for manual verification
+        ref_log = _format_reference_log(metric_lookup)
+        _add_activity_log(workflow_id, progress_store, "analyzer",
+                          f"Reference values: {ref_log}")
         current_revision = 0
 
     # In revision mode, add delay before LLM call to avoid rate limits
