@@ -989,9 +989,10 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
     # Generate detailed data report (shown before SWOT)
     data_report = _generate_data_report(raw, is_financial=is_financial)
 
-    # Detect revision mode: if revision_count > 0 and critique_details exist
-    is_revision = state.get("revision_count", 0) > 0
+    # Detect revision mode: if we have critique_details with REJECTED status
+    # (revision_count may still be 0 on first revision loop)
     critique_details = state.get("critique_details", {})
+    is_revision = bool(critique_details) and critique_details.get("status") == "REJECTED"
 
     if is_revision and critique_details:
         # REVISION MODE: Use enhanced revision prompt with Critic feedback
@@ -1022,8 +1023,8 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
     # In revision mode, add delay before LLM call to avoid rate limits
     # (Critic just called LLM, so we need to wait)
     if is_revision:
-        print("Waiting 2s before revision LLM call (rate limit buffer)...")
-        time.sleep(2)
+        print("Waiting 5s before revision LLM call (rate limit buffer)...")
+        time.sleep(5)
 
     start_time = time.time()
     response, provider, error, providers_failed = llm.query(prompt, temperature=0)

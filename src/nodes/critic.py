@@ -322,8 +322,8 @@ def critic_node(state, workflow_id=None, progress_store=None):
     llm = get_llm_client()
 
     # Add delay before LLM call to avoid rate limits (Analyzer just called LLM)
-    print("Waiting 2s before Critic LLM call (rate limit buffer)...")
-    time.sleep(2)
+    print("Waiting 5s before Critic LLM call (rate limit buffer)...")
+    time.sleep(5)
 
     _add_activity_log(workflow_id, progress_store, "critic", "Calling LLM for quality evaluation...")
     start_time = time.time()

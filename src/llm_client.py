@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 
 # Retry configuration for rate limits
 MAX_RETRIES = 3
-INITIAL_BACKOFF = 2  # seconds
+INITIAL_BACKOFF = 3  # seconds (backoffs: 3s, 6s, 12s)
 
 
 class LLMClient:
