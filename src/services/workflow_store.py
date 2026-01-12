@@ -130,30 +130,45 @@ def _extract_metrics_from_raw_data(raw_data: dict) -> list:
 
     for metric_name in fin_metrics:
         # Prefer SEC EDGAR data, fall back to Yahoo Finance
-        metric_data = sec_data.get(metric_name) or yf_fund.get(metric_name)
-        if metric_data is not None:
-            entry = {
-                "timestamp": timestamp,
-                "source": "fundamentals",
-                "metric": metric_name,
-            }
-            if isinstance(metric_data, dict):
-                entry["value"] = metric_data.get("value")
-                if metric_data.get("end_date"):
-                    entry["end_date"] = metric_data["end_date"]
-                if metric_data.get("fiscal_year"):
-                    entry["fiscal_year"] = metric_data["fiscal_year"]
-                if metric_data.get("form"):
-                    entry["form"] = metric_data["form"]
-            else:
-                entry["value"] = metric_data
+        # Track which source the data actually came from
+        sec_metric = sec_data.get(metric_name)
+        yf_metric = yf_fund.get(metric_name)
 
-            if entry.get("value") is not None:
-                metrics.append(entry)
+        if sec_metric is not None:
+            metric_data = sec_metric
+            actual_source = "sec_edgar"
+        elif yf_metric is not None:
+            metric_data = yf_metric
+            actual_source = "yahoo_finance"
+        else:
+            continue
+
+        entry = {
+            "timestamp": timestamp,
+            "source": "fundamentals",
+            "metric": metric_name,
+            "data_source": actual_source,  # Track actual data source for frontend
+        }
+        if isinstance(metric_data, dict):
+            entry["value"] = metric_data.get("value")
+            if metric_data.get("end_date"):
+                entry["end_date"] = metric_data["end_date"]
+            if metric_data.get("fiscal_year"):
+                entry["fiscal_year"] = metric_data["fiscal_year"]
+            if metric_data.get("form"):
+                entry["form"] = metric_data["form"]
+        else:
+            entry["value"] = metric_data
+
+        if entry.get("value") is not None:
+            metrics.append(entry)
 
     # Extract valuation metrics from Yahoo Finance
     val_all = multi_source.get("valuation_all", {})
     yf_val = val_all.get("yahoo_finance", {}).get("data", {})
+
+    # Get valuation fetch date if available (point-in-time data)
+    val_fetch_date = yf_val.get("_fetch_date") or yf_val.get("fetch_date")
 
     val_metrics = [
         "market_cap", "enterprise_value", "trailing_pe", "forward_pe",
@@ -164,14 +179,27 @@ def _extract_metrics_from_raw_data(raw_data: dict) -> list:
     for metric_name in val_metrics:
         metric_data = yf_val.get(metric_name)
         if metric_data is not None:
-            value = metric_data.get("value") if isinstance(metric_data, dict) else metric_data
-            if value is not None:
-                metrics.append({
-                    "timestamp": timestamp,
-                    "source": "valuation",
-                    "metric": metric_name,
-                    "value": value
-                })
+            entry = {
+                "timestamp": timestamp,
+                "source": "valuation",
+                "metric": metric_name,
+            }
+            if isinstance(metric_data, dict):
+                entry["value"] = metric_data.get("value")
+                # Extract date if available in metric data
+                if metric_data.get("date"):
+                    entry["end_date"] = metric_data["date"]
+                elif metric_data.get("end_date"):
+                    entry["end_date"] = metric_data["end_date"]
+                elif val_fetch_date:
+                    entry["end_date"] = val_fetch_date
+            else:
+                entry["value"] = metric_data
+                if val_fetch_date:
+                    entry["end_date"] = val_fetch_date
+
+            if entry.get("value") is not None:
+                metrics.append(entry)
 
     # Extract volatility metrics
     vol_all = multi_source.get("volatility_all", {})
@@ -193,17 +221,32 @@ def _extract_metrics_from_raw_data(raw_data: dict) -> list:
             metrics.append(entry)
 
     # Beta and volatility from Yahoo Finance
+    # Get volatility fetch date if available
+    vol_fetch_date = yf_vol.get("_fetch_date") or yf_vol.get("fetch_date")
+
     for vol_metric in ["beta", "historical_volatility", "implied_volatility"]:
         metric_data = yf_vol.get(vol_metric)
         if metric_data is not None:
-            value = metric_data.get("value") if isinstance(metric_data, dict) else metric_data
-            if value is not None:
-                metrics.append({
-                    "timestamp": timestamp,
-                    "source": "volatility",
-                    "metric": vol_metric,
-                    "value": value
-                })
+            entry = {
+                "timestamp": timestamp,
+                "source": "volatility",
+                "metric": vol_metric,
+            }
+            if isinstance(metric_data, dict):
+                entry["value"] = metric_data.get("value")
+                if metric_data.get("date"):
+                    entry["end_date"] = metric_data["date"]
+                elif metric_data.get("end_date"):
+                    entry["end_date"] = metric_data["end_date"]
+                elif vol_fetch_date:
+                    entry["end_date"] = vol_fetch_date
+            else:
+                entry["value"] = metric_data
+                if vol_fetch_date:
+                    entry["end_date"] = vol_fetch_date
+
+            if entry.get("value") is not None:
+                metrics.append(entry)
 
     # Extract macro indicators
     macro_all = multi_source.get("macro_all", {})

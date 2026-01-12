@@ -97,10 +97,14 @@ function formatValue(value: string | number): string {
 }
 
 // Infer data source from category and metric
-function inferDataSource(category: string, metric: string, form?: string): string {
+function inferDataSource(category: string, metric: string, form?: string, dataSource?: string): string {
   const lowerMetric = metric.toLowerCase()
 
   if (category === 'fundamentals') {
+    // Use explicit data_source if provided, otherwise fall back to form-based inference
+    if (dataSource === 'sec_edgar') return 'SEC EDGAR'
+    if (dataSource === 'yahoo_finance') return 'Yahoo Finance'
+    // Legacy fallback: infer from form field
     return form ? 'SEC EDGAR' : 'Yahoo Finance'
   }
   if (category === 'valuation') return 'Yahoo Finance'
@@ -161,6 +165,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
       fiscalPeriod?: string | null
       endDate?: string
       form?: string
+      dataSource?: string
     }>> = {
       fundamentals: [],
       valuation: [],
@@ -180,7 +185,8 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
           value: m.value,
           fiscalPeriod,
           endDate: m.end_date,
-          form: m.form
+          form: m.form,
+          dataSource: m.data_source
         })
       }
     }
@@ -207,7 +213,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
           value: formatValue(m.value),
           dataType: inferDataType(m.form, m.metric),
           asOf: m.endDate || '-',
-          source: inferDataSource(cat, m.metric, m.form),
+          source: inferDataSource(cat, m.metric, m.form, m.dataSource),
           category: cat.charAt(0).toUpperCase() + cat.slice(1)
         })
       }

@@ -34,6 +34,7 @@ export interface MetricEntry {
   end_date?: string       // Fiscal period end date, e.g., "2023-09-30"
   fiscal_year?: number    // Fiscal year number, e.g., 2023
   form?: string           // SEC form type: "10-K" (annual) or "10-Q" (quarterly)
+  data_source?: string    // Actual data source: "sec_edgar" or "yahoo_finance"
 }
 
 // MCP status for each server (partial = some data but with errors)
