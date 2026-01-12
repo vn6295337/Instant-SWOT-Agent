@@ -579,10 +579,17 @@ def _extract_key_metrics(raw_data: str) -> dict:
     }
 
     # Extract fundamentals with temporal data
+    # Structure: metrics.fundamentals = {"sec_edgar": {"data": {...}}, "yahoo_finance": {"data": {...}}}
+    # Also check multi_source.fundamentals_all for the same structure
     fin = metrics.get("fundamentals", {})
+    if not fin or "error" in fin:
+        fin = data.get("multi_source", {}).get("fundamentals_all", {})
     if fin and "error" not in fin:
-        fin_data = fin.get("fundamentals", {})
-        debt_data = fin.get("debt", {})
+        # Use SEC EDGAR as primary, Yahoo Finance as fallback
+        sec_data = fin.get("sec_edgar", {}).get("data", {})
+        yf_data = fin.get("yahoo_finance", {}).get("data", {})
+        # Merge with SEC as primary
+        fin_data = {**yf_data, **sec_data}  # SEC overwrites YF where both exist
         extracted["fundamentals"] = {
             "revenue": _extract_temporal_metric(fin_data.get("revenue", {})),
             "revenue_cagr_3yr": fin_data.get("revenue_growth_3yr"),
@@ -590,42 +597,41 @@ def _extract_key_metrics(raw_data: str) -> dict:
             "gross_margin": _extract_temporal_metric(fin_data.get("gross_margin_pct", {})),
             "operating_margin": _extract_temporal_metric(fin_data.get("operating_margin_pct", {})),
             "eps": _extract_temporal_metric(fin_data.get("eps", {})),
-            "debt_to_equity": _extract_temporal_metric(debt_data.get("debt_to_equity", {})),
-            "free_cash_flow": _extract_temporal_metric(fin.get("cash_flow", {}).get("free_cash_flow", {})),
+            "debt_to_equity": _extract_temporal_metric(fin_data.get("debt_to_equity", {})),
+            "free_cash_flow": _extract_temporal_metric(fin_data.get("free_cash_flow", {})),
             "net_income": _extract_temporal_metric(fin_data.get("net_income", {})),
         }
 
     # Extract valuation (with temporal data)
+    # Structure: {"yahoo_finance": {"data": {...}, "regular_market_time": "..."}}
     val = metrics.get("valuation", {})
+    if not val or "error" in val:
+        val = data.get("multi_source", {}).get("valuation_all", {})
     if val and "error" not in val:
-        val_metrics = val.get("metrics", {})
-        pe = val_metrics.get("pe_ratio", {})
-        # Get valuation date from sources or response-level
-        val_date = (
-            val.get("sources", {}).get("yahoo_finance", {}).get("regular_market_time")
-            or val.get("as_of")
-            or (val.get("generated_at", "")[:10] if val.get("generated_at") else None)
-        )
+        yf_val = val.get("yahoo_finance", {}).get("data", {})
+        val_date = val.get("yahoo_finance", {}).get("regular_market_time")
         extracted["valuation"] = {
-            "pe_trailing": {"value": pe.get("trailing") if isinstance(pe, dict) else pe, "end_date": val_date},
-            "pe_forward": {"value": pe.get("forward") if isinstance(pe, dict) else None, "end_date": val_date},
-            "pb_ratio": {"value": val_metrics.get("pb_ratio"), "end_date": val_date},
-            "ps_ratio": {"value": val_metrics.get("ps_ratio"), "end_date": val_date},
-            "ev_ebitda": {"value": val_metrics.get("ev_ebitda"), "end_date": val_date},
+            "pe_trailing": {"value": yf_val.get("trailing_pe"), "end_date": val_date},
+            "pe_forward": {"value": yf_val.get("forward_pe"), "end_date": val_date},
+            "pb_ratio": {"value": yf_val.get("pb_ratio"), "end_date": val_date},
+            "ps_ratio": {"value": yf_val.get("ps_ratio"), "end_date": val_date},
+            "ev_ebitda": {"value": yf_val.get("ev_ebitda"), "end_date": val_date},
             "valuation_signal": val.get("overall_signal"),
             "as_of": val_date,
         }
 
     # Extract volatility (with temporal data)
+    # Structure: {"yahoo_finance": {"data": {...}}, "market_volatility_context": {"vix": {...}, "vxn": {...}}}
     vol = metrics.get("volatility", {})
+    if not vol or "error" in vol:
+        vol = data.get("multi_source", {}).get("volatility_all", {})
     if vol and "error" not in vol:
-        vol_metrics = vol.get("metrics", {})
-        # Get response-level date as fallback
+        yf_vol = vol.get("yahoo_finance", {}).get("data", {})
+        mkt_ctx = vol.get("market_volatility_context", {})
         vol_date = vol.get("generated_at", "")[:10] if vol.get("generated_at") else None
-        # Extract each metric with its own date (or fallback to response date)
-        vix_data = vol_metrics.get("vix", {})
-        beta_data = vol_metrics.get("beta", {})
-        hv_data = vol_metrics.get("historical_volatility", {})
+        vix_data = mkt_ctx.get("vix", {})
+        beta_data = yf_vol.get("beta", {})
+        hv_data = yf_vol.get("historical_volatility", {})
         extracted["volatility"] = {
             "beta": {"value": beta_data.get("value") if isinstance(beta_data, dict) else beta_data,
                      "end_date": beta_data.get("date") or vol_date if isinstance(beta_data, dict) else vol_date},
@@ -637,14 +643,19 @@ def _extract_key_metrics(raw_data: str) -> dict:
         }
 
     # Extract macro (with temporal data)
+    # Structure: {"bea_bls": {"data": {...}}, "fred": {"data": {...}}}
     macro = metrics.get("macro", {})
+    if not macro or "error" in macro:
+        macro = data.get("multi_source", {}).get("macro_all", {})
     if macro and "error" not in macro:
-        macro_metrics = macro.get("metrics", {})
-        # Each macro metric has its own date/period
-        gdp = macro_metrics.get("gdp_growth", {})
-        interest = macro_metrics.get("interest_rate", {})
-        inflation = macro_metrics.get("cpi_inflation", {})
-        unemp = macro_metrics.get("unemployment", {})
+        bea_bls = macro.get("bea_bls", {}).get("data", {})
+        fred = macro.get("fred", {}).get("data", {})
+        # Merge sources (BEA/BLS primary, FRED fallback)
+        macro_data = {**fred, **bea_bls}
+        gdp = macro_data.get("gdp_growth", {})
+        interest = macro_data.get("interest_rate", {})
+        inflation = macro_data.get("cpi_inflation", {})
+        unemp = macro_data.get("unemployment", {})
         extracted["macro"] = {
             "gdp_growth": {"value": gdp.get("value") if isinstance(gdp, dict) else gdp,
                           "end_date": gdp.get("date") or gdp.get("period") if isinstance(gdp, dict) else None},

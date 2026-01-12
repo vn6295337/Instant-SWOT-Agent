@@ -182,8 +182,8 @@ def run_llm_evaluation(report: str, source_data: str, iteration: int, llm) -> di
     Returns:
         Evaluation result dict with scores, status, and feedback
     """
-    # Truncate source data if too long
-    max_source_len = 8000
+    # Truncate source data if too long (Groq has ~8K token limit)
+    max_source_len = 4000
     if len(source_data) > max_source_len:
         source_data = source_data[:max_source_len] + "\n... [truncated]"
 
