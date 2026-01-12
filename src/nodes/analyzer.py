@@ -604,7 +604,7 @@ def _extract_key_metrics(raw_data: str) -> dict:
         val_date = (
             val.get("sources", {}).get("yahoo_finance", {}).get("regular_market_time")
             or val.get("as_of")
-            or val.get("generated_at", "")[:10] if val.get("generated_at") else None
+            or (val.get("generated_at", "")[:10] if val.get("generated_at") else None)
         )
         extracted["valuation"] = {
             "pe_trailing": {"value": pe.get("trailing") if isinstance(pe, dict) else pe, "end_date": val_date},
@@ -755,20 +755,31 @@ def _format_metrics_for_prompt(extracted: dict, is_financial: bool = False) -> s
 
         lines.append("")
 
+    # Helper to extract value from temporal dict or plain value
+    def _get_val(d):
+        if isinstance(d, dict):
+            return d.get("value")
+        return d
+
     # Valuation
     val = extracted.get("valuation", {})
     if val:
         lines.append("=== VALUATION (from Yahoo Finance) ===")
-        if val.get("pe_trailing"):
-            lines.append(f"- P/E Ratio (trailing): {val['pe_trailing']:.1f}")
-        if val.get("pe_forward"):
-            lines.append(f"- P/E Ratio (forward): {val['pe_forward']:.1f}")
-        if val.get("pb_ratio"):
-            lines.append(f"- P/B Ratio: {val['pb_ratio']:.2f}")
-        if val.get("ps_ratio"):
-            lines.append(f"- P/S Ratio: {val['ps_ratio']:.2f}")
-        if val.get("ev_ebitda") and not is_financial:
-            lines.append(f"- EV/EBITDA: {val['ev_ebitda']:.1f}")
+        pe_t = _get_val(val.get("pe_trailing"))
+        pe_f = _get_val(val.get("pe_forward"))
+        pb = _get_val(val.get("pb_ratio"))
+        ps = _get_val(val.get("ps_ratio"))
+        ev = _get_val(val.get("ev_ebitda"))
+        if pe_t:
+            lines.append(f"- P/E Ratio (trailing): {pe_t:.1f}")
+        if pe_f:
+            lines.append(f"- P/E Ratio (forward): {pe_f:.1f}")
+        if pb:
+            lines.append(f"- P/B Ratio: {pb:.2f}")
+        if ps:
+            lines.append(f"- P/S Ratio: {ps:.2f}")
+        if ev and not is_financial:
+            lines.append(f"- EV/EBITDA: {ev:.1f}")
         if val.get("valuation_signal"):
             lines.append(f"- Overall Signal: {val['valuation_signal']}")
         lines.append("")
@@ -777,26 +788,33 @@ def _format_metrics_for_prompt(extracted: dict, is_financial: bool = False) -> s
     vol = extracted.get("volatility", {})
     if vol:
         lines.append("=== VOLATILITY/RISK ===")
-        if vol.get("beta"):
-            lines.append(f"- Beta: {vol['beta']:.2f}")
-        if vol.get("vix"):
-            lines.append(f"- VIX (market fear index): {vol['vix']:.1f}")
-        if vol.get("historical_volatility"):
-            lines.append(f"- Historical Volatility: {vol['historical_volatility']:.1f}%")
+        beta = _get_val(vol.get("beta"))
+        vix = _get_val(vol.get("vix"))
+        hv = _get_val(vol.get("historical_volatility"))
+        if beta:
+            lines.append(f"- Beta: {beta:.2f}")
+        if vix:
+            lines.append(f"- VIX (market fear index): {vix:.1f}")
+        if hv:
+            lines.append(f"- Historical Volatility: {hv:.1f}%")
         lines.append("")
 
     # Macro
     macro = extracted.get("macro", {})
     if macro:
         lines.append("=== MACROECONOMIC ENVIRONMENT (from FRED) ===")
-        if macro.get("gdp_growth"):
-            lines.append(f"- GDP Growth: {macro['gdp_growth']:.1f}%")
-        if macro.get("interest_rate"):
-            lines.append(f"- Federal Funds Rate: {macro['interest_rate']:.2f}%")
-        if macro.get("inflation"):
-            lines.append(f"- Inflation (CPI): {macro['inflation']:.1f}%")
-        if macro.get("unemployment"):
-            lines.append(f"- Unemployment: {macro['unemployment']:.1f}%")
+        gdp = _get_val(macro.get("gdp_growth"))
+        ir = _get_val(macro.get("interest_rate"))
+        inf = _get_val(macro.get("inflation"))
+        unemp = _get_val(macro.get("unemployment"))
+        if gdp:
+            lines.append(f"- GDP Growth: {gdp:.1f}%")
+        if ir:
+            lines.append(f"- Federal Funds Rate: {ir:.2f}%")
+        if inf:
+            lines.append(f"- Inflation (CPI): {inf:.1f}%")
+        if unemp:
+            lines.append(f"- Unemployment: {unemp:.1f}%")
         lines.append("")
 
     # News with VADER sentiment

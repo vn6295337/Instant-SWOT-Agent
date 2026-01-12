@@ -230,7 +230,7 @@ def _extract_metrics_from_raw_data(raw_data: dict) -> list:
     vol_fetch_date = (
         yf_vol.get("_fetch_date")
         or yf_vol.get("fetch_date")
-        or vol_all.get("generated_at", "")[:10] if vol_all.get("generated_at") else None
+        or (vol_all.get("generated_at", "")[:10] if vol_all.get("generated_at") else None)
     )
 
     for vol_metric in ["beta", "historical_volatility", "implied_volatility"]:
