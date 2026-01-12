@@ -73,14 +73,15 @@ const NODES = {
 }
 
 const MCP_START_X = NODES.researcher.x + NODE_SIZE / 2 + 40
-const MCP_GAP = 48
+const MCP_GAP_LARGE = 48  // Gap between fundamentals and valuation
+const MCP_GAP_SMALL = 40  // Reduced gap for other servers
 const MCP_SERVERS = [
   { id: 'fundamentals', label: 'Fundamentals', icon: DollarSign, x: MCP_START_X },
-  { id: 'valuation', label: 'Valuation', icon: TrendingUp, x: MCP_START_X + MCP_GAP },
-  { id: 'volatility', label: 'Volatility', icon: Activity, x: MCP_START_X + MCP_GAP * 2 },
-  { id: 'macro', label: 'Macro (US)', icon: Globe, x: MCP_START_X + MCP_GAP * 3 },
-  { id: 'news', label: 'News', icon: Newspaper, x: MCP_START_X + MCP_GAP * 4 },
-  { id: 'sentiment', label: 'Sentiment', icon: MessageSquare, x: MCP_START_X + MCP_GAP * 5 },
+  { id: 'valuation', label: 'Valuation', icon: TrendingUp, x: MCP_START_X + MCP_GAP_LARGE },
+  { id: 'volatility', label: 'Volatility', icon: Activity, x: MCP_START_X + MCP_GAP_LARGE + MCP_GAP_SMALL },
+  { id: 'macro', label: 'Macro (US)', icon: Globe, x: MCP_START_X + MCP_GAP_LARGE + MCP_GAP_SMALL * 2 },
+  { id: 'news', label: 'News', icon: Newspaper, x: MCP_START_X + MCP_GAP_LARGE + MCP_GAP_SMALL * 3 },
+  { id: 'sentiment', label: 'Sentiment', icon: MessageSquare, x: MCP_START_X + MCP_GAP_LARGE + MCP_GAP_SMALL * 4 },
 ]
 
 const AGENTS_CENTER_X = (NODES.analyzer.x + NODES.critic.x) / 2  // Now between Analyzer and Critic only
