@@ -327,6 +327,12 @@ def critic_node(state, workflow_id=None, progress_store=None):
     elapsed = time.time() - start_time
     provider = result.get('provider', 'unknown')
 
+    # Propagate LLM error to state to trigger graceful exit (prevents infinite retry loop)
+    if result.get("error"):
+        _add_activity_log(workflow_id, progress_store, "critic",
+                          "LLM evaluation failed - exiting gracefully with current draft")
+        state["analyzer_revision_skipped"] = True  # Triggers graceful exit in should_continue()
+
     # Log failed providers
     providers_failed = result.get('providers_failed', [])
     for pf in providers_failed:
