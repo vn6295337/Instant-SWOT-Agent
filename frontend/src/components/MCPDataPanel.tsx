@@ -167,11 +167,26 @@ function inferDataSource(category: string, metric: string, form?: string, dataSo
 }
 
 // Infer data type from form and metric
-function inferDataType(form?: string, metric?: string): string {
+function inferDataType(form?: string, metric?: string, source?: string): string {
   if (form === '10-K') return 'FY'
   if (form === '10-Q') return 'Q'
 
   const lowerMetric = (metric || '').toLowerCase()
+
+  // Valuation metrics are spot/current prices (not TTM)
+  const spotMetrics = [
+    'current_price', 'market_cap', 'enterprise_value',
+    'trailing_pe', 'forward_pe', 'pb_ratio', 'ps_ratio',
+    'trailing_peg', 'forward_peg', 'ev_ebitda', 'ev_revenue',
+    'price_to_fcf', 'dividend_yield'
+  ]
+  if (spotMetrics.includes(lowerMetric)) return 'Spot'
+
+  // Growth metrics are year-over-year
+  const yoyMetrics = ['revenue_growth', 'earnings_growth']
+  if (yoyMetrics.includes(lowerMetric)) return 'YoY'
+
+  // Volatility/macro metrics
   if (['vix', 'vxn'].includes(lowerMetric)) return 'Daily'
   if (['gdp_growth'].includes(lowerMetric)) return 'Quarterly'
   if (['interest_rate', 'cpi_inflation', 'unemployment'].includes(lowerMetric)) return 'Monthly'
@@ -180,6 +195,80 @@ function inferDataType(form?: string, metric?: string): string {
   if (lowerMetric === 'implied_volatility') return 'Forward'
 
   return 'TTM'
+}
+
+// Extract date from multiple possible field names
+function extractDate(item: Record<string, unknown>): string | undefined {
+  // Check multiple possible date field names
+  const dateFields = ['datetime', 'published_date', 'date', 'publishedAt', 'timestamp', 'created_at']
+  for (const field of dateFields) {
+    if (item[field]) {
+      return String(item[field])
+    }
+  }
+  return undefined
+}
+
+// Normalize various date formats to YYYY-MM-DD
+function normalizeDate(dateStr: string | undefined | null): string {
+  if (!dateStr) return '-'
+
+  const str = String(dateStr).trim()
+
+  // Already a dash or empty
+  if (str === '-' || str === '') return '-'
+
+  // Quarter format: 2025Q3 -> 2025-09-30 (BEA quarters: Q1=Mar, Q2=Jun, Q3=Sep, Q4=Dec)
+  const quarterMatch = str.match(/^(\d{4})Q(\d)$/)
+  if (quarterMatch) {
+    const year = quarterMatch[1]
+    const quarter = parseInt(quarterMatch[2], 10)
+    // BEA quarter end dates: Q1=03-31, Q2=06-30, Q3=09-30, Q4=12-31
+    const quarterEndDates: Record<number, string> = {
+      1: '03-31',
+      2: '06-30',
+      3: '09-30',
+      4: '12-31'
+    }
+    return `${year}-${quarterEndDates[quarter] || '12-31'}`
+  }
+
+  // Month-year format: 2025-November -> 2025-11-30 (last day of month)
+  const monthYearMatch = str.match(/^(\d{4})-(\w+)$/)
+  if (monthYearMatch) {
+    const year = parseInt(monthYearMatch[1], 10)
+    const monthName = monthYearMatch[2].toLowerCase()
+    const monthMap: Record<string, number> = {
+      january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+      july: 7, august: 8, september: 9, october: 10, november: 11, december: 12
+    }
+    const month = monthMap[monthName]
+    if (month) {
+      // Get last day of month
+      const lastDay = new Date(year, month, 0).getDate()
+      return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    }
+  }
+
+  // Compact format: 20260108 -> 2026-01-08
+  const compactMatch = str.match(/^(\d{4})(\d{2})(\d{2})$/)
+  if (compactMatch) {
+    return `${compactMatch[1]}-${compactMatch[2]}-${compactMatch[3]}`
+  }
+
+  // ISO format already: YYYY-MM-DD - return as is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str
+  }
+
+  // ISO datetime: YYYY-MM-DDTHH:MM:SS -> YYYY-MM-DD
+  const isoMatch = str.match(/^(\d{4}-\d{2}-\d{2})T/)
+  if (isoMatch) {
+    return isoMatch[1]
+  }
+
+  // Return original if no pattern matches
+  return str
 }
 
 // Format fiscal period label (e.g., "FY 2023" or "Q3 2024")
@@ -257,7 +346,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
           metric: m.metric,
           value: formatValue(m.value, m.metric),
           dataType: inferDataType(m.form, m.metric),
-          asOf: m.endDate || '-',
+          asOf: normalizeDate(m.endDate),
           source: inferDataSource(cat, m.metric, m.form, m.dataSource),
           category: cat.charAt(0).toUpperCase() + cat.slice(1)
         })
@@ -290,7 +379,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
           articles.push({
             title: String(a.title || a.content || 'News article'),
             url: String(a.url || '#'),
-            date: a.datetime ? String(a.datetime) : undefined,
+            date: extractDate(a),
             source: a.source ? String(a.source) : 'Tavily'
           })
         }
@@ -303,7 +392,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
         articles.push({
           title: a.title || 'News article',
           url: a.url || '#',
-          date: a.published_date,
+          date: extractDate(a as Record<string, unknown>),
           source: a.source || 'Tavily'
         })
       }
@@ -339,7 +428,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
       results.push({
         title: String(item.title || item.content || `${source} item`),
         url: String(item.url || '#'),
-        date: item.datetime ? String(item.datetime) : undefined,
+        date: extractDate(item),
         source,
         subreddit: item.subreddit ? String(item.subreddit) : undefined
       })
@@ -363,7 +452,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
     for (const article of newsArticles) {
       rows.push({
         title: article.title,
-        date: article.date || '-',
+        date: normalizeDate(article.date),
         source: article.source || 'Tavily',
         subreddit: '-',
         url: article.url,
@@ -375,7 +464,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
     for (const item of sentimentItems) {
       rows.push({
         title: item.title,
-        date: item.date || '-',
+        date: normalizeDate(item.date),
         source: item.source,
         subreddit: item.subreddit ? `r/${item.subreddit}` : '-',
         url: item.url,

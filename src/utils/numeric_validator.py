@@ -224,3 +224,171 @@ def validate_numeric_accuracy(swot_text: str, metric_reference: dict) -> list[st
         errors.append(f"Invalid reference: {ref_id} not in metric table")
 
     return errors
+
+
+# ============================================================
+# LAYER 3: Uncited Number Detection
+# ============================================================
+
+# Pattern to match metric-like numbers (will filter out cited ones programmatically)
+# Matches: $56.6B, $394M, 25.3%, 12.14, 0.84x, etc.
+METRIC_NUMBER_PATTERN = re.compile(
+    r'('
+    r'\$[\d,]+\.?\d*[BMK]?'  # Currency: $56.6B, $394M, $1,234
+    r'|'
+    r'[\d,]+\.?\d*%'  # Percentage: 25.3%, 12%
+    r'|'
+    r'[\d,]+\.\d+x'  # Ratio with x: 1.5x, 12.3x
+    r')',
+    re.IGNORECASE
+)
+
+# Keywords that indicate a number is likely a metric value
+METRIC_CONTEXT_KEYWORDS = [
+    'revenue', 'income', 'profit', 'margin', 'cap', 'market cap', 'enterprise value',
+    'p/e', 'pe ratio', 'p/b', 'pb ratio', 'p/s', 'ps ratio', 'ev/ebitda',
+    'beta', 'volatility', 'vix', 'growth', 'yield', 'dividend',
+    'debt', 'equity', 'assets', 'liabilities', 'cash flow', 'fcf',
+    'eps', 'earnings', 'roi', 'roe', 'roa', 'ebitda',
+    'gdp', 'inflation', 'unemployment', 'interest rate',
+]
+
+
+def find_uncited_numbers(swot_text: str, metric_reference: dict) -> list[dict]:
+    """
+    Find numbers that look like metrics but don't have [M##] citations.
+
+    Returns list of suspicious uncited numbers with context.
+    """
+    uncited = []
+
+    # Get all cited positions to exclude
+    cited_matches = list(CITATION_PATTERN.finditer(swot_text))
+    cited_positions = set()
+    for match in cited_matches:
+        # Mark the entire citation span as "cited"
+        cited_positions.update(range(match.start(), match.end()))
+
+    # Find all metric-like numbers
+    for match in METRIC_NUMBER_PATTERN.finditer(swot_text):
+        # Skip if this position overlaps with a citation
+        if any(pos in cited_positions for pos in range(match.start(), match.end())):
+            continue
+
+        value_str = match.group(1)
+        normalized = normalize_value(value_str)
+
+        if normalized is None:
+            continue
+
+        # Get surrounding context (50 chars before and after)
+        start = max(0, match.start() - 50)
+        end = min(len(swot_text), match.end() + 50)
+        context = swot_text[start:end].replace('\n', ' ')
+
+        # Check if context contains metric-related keywords
+        context_lower = context.lower()
+        has_metric_context = any(kw in context_lower for kw in METRIC_CONTEXT_KEYWORDS)
+
+        # Check if value matches any known metric (within tolerance)
+        matches_known_metric = False
+        matched_metric_key = None
+        for ref_id, ref_entry in metric_reference.items():
+            expected = ref_entry.get("raw_value")
+            if expected and values_match(normalized, expected):
+                matches_known_metric = True
+                matched_metric_key = ref_entry.get("key")
+                break
+
+        # Flag as suspicious if it looks like a metric
+        if has_metric_context or matches_known_metric:
+            uncited.append({
+                "value": value_str,
+                "normalized": normalized,
+                "position": match.start(),
+                "context": context.strip(),
+                "has_metric_context": has_metric_context,
+                "matches_known_metric": matches_known_metric,
+                "matched_metric_key": matched_metric_key,
+            })
+
+    return uncited
+
+
+def validate_uncited_numbers(swot_text: str, metric_reference: dict) -> list[str]:
+    """
+    Validate that metric-like numbers have proper citations.
+
+    Returns list of warnings for uncited numbers that should have citations.
+    """
+    if not metric_reference:
+        return []
+
+    uncited = find_uncited_numbers(swot_text, metric_reference)
+    warnings = []
+
+    for item in uncited:
+        if item["matches_known_metric"]:
+            # This number matches a known metric - MUST have citation
+            warnings.append(
+                f"Uncited metric value: {item['value']} appears to be {item['matched_metric_key']} - add [M##] citation"
+            )
+        elif item["has_metric_context"]:
+            # Number in metric context without citation - suspicious
+            warnings.append(
+                f"Uncited number in metric context: {item['value']} - verify source or add citation"
+            )
+
+    return warnings
+
+
+def get_citation_count(swot_text: str) -> int:
+    """Count the number of [M##] citations in the text."""
+    return len(CITATION_PATTERN.findall(swot_text))
+
+
+def validate_minimum_citations(swot_text: str, metric_reference: dict, min_ratio: float = 0.5) -> dict:
+    """
+    Check if SWOT has enough citations relative to available metrics.
+
+    Args:
+        swot_text: The SWOT analysis output
+        metric_reference: Available metrics
+        min_ratio: Minimum ratio of citations to available metrics (default 0.5 = 50%)
+
+    Returns:
+        {
+            "valid": bool,
+            "citations_found": int,
+            "metrics_available": int,
+            "ratio": float,
+            "message": str
+        }
+    """
+    citations_found = get_citation_count(swot_text)
+    metrics_available = len(metric_reference) if metric_reference else 0
+
+    if metrics_available == 0:
+        return {
+            "valid": True,
+            "citations_found": citations_found,
+            "metrics_available": 0,
+            "ratio": 0,
+            "message": "No metrics available for citation"
+        }
+
+    ratio = citations_found / metrics_available
+    valid = ratio >= min_ratio
+
+    if valid:
+        message = f"Citation coverage: {citations_found}/{metrics_available} ({ratio:.0%})"
+    else:
+        message = f"Insufficient citations: {citations_found}/{metrics_available} ({ratio:.0%}) - minimum {min_ratio:.0%} required"
+
+    return {
+        "valid": valid,
+        "citations_found": citations_found,
+        "metrics_available": metrics_available,
+        "ratio": ratio,
+        "message": message
+    }

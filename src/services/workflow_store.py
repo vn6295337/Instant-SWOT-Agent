@@ -168,7 +168,12 @@ def _extract_metrics_from_raw_data(raw_data: dict) -> list:
     yf_val = val_all.get("yahoo_finance", {}).get("data", {})
 
     # Get valuation fetch date if available (point-in-time data)
-    val_fetch_date = yf_val.get("_fetch_date") or yf_val.get("fetch_date")
+    # MCP server returns regular_market_time from Yahoo Finance quote data
+    val_fetch_date = (
+        yf_val.get("_fetch_date")
+        or yf_val.get("fetch_date")
+        or multi_source.get("valuation_all", {}).get("yahoo_finance", {}).get("regular_market_time")
+    )
 
     val_metrics = [
         "market_cap", "enterprise_value", "trailing_pe", "forward_pe",
@@ -221,8 +226,12 @@ def _extract_metrics_from_raw_data(raw_data: dict) -> list:
             metrics.append(entry)
 
     # Beta and volatility from Yahoo Finance
-    # Get volatility fetch date if available
-    vol_fetch_date = yf_vol.get("_fetch_date") or yf_vol.get("fetch_date")
+    # Get volatility fetch date if available (MCP returns generated_at at response level)
+    vol_fetch_date = (
+        yf_vol.get("_fetch_date")
+        or yf_vol.get("fetch_date")
+        or vol_all.get("generated_at", "")[:10] if vol_all.get("generated_at") else None
+    )
 
     for vol_metric in ["beta", "historical_volatility", "implied_volatility"]:
         metric_data = yf_vol.get(vol_metric)

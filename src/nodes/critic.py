@@ -4,7 +4,11 @@ import json
 import time
 
 # Layer 4: Deterministic numeric validation
-from src.utils.numeric_validator import validate_numeric_accuracy
+from src.utils.numeric_validator import (
+    validate_numeric_accuracy,
+    validate_uncited_numbers,
+    validate_minimum_citations,
+)
 from src.nodes.analyzer import _verify_reference_integrity
 
 
@@ -402,6 +406,75 @@ def critic_node(state, workflow_id=None, progress_store=None):
             else:
                 _add_activity_log(workflow_id, progress_store, "critic",
                                   "Numeric validation: all citations verified")
+
+            # ============================================================
+            # LAYER 3: Uncited Number Detection
+            # ============================================================
+            uncited_warnings = validate_uncited_numbers(report, metric_ref)
+            if uncited_warnings:
+                _add_activity_log(workflow_id, progress_store, "critic",
+                                  f"Uncited numbers: {len(uncited_warnings)} suspicious value(s) found")
+
+                # Add to hallucinations_detected
+                if "hallucinations_detected" not in result:
+                    result["hallucinations_detected"] = []
+                result["hallucinations_detected"].extend(uncited_warnings)
+
+                # Cap score and add feedback (less severe than mismatches)
+                if scores.get("evidence_grounding", 0) > 6:
+                    scores["evidence_grounding"] = 6
+                    if "hard_floor_violations" not in result:
+                        result["hard_floor_violations"] = []
+                    result["hard_floor_violations"].append(
+                        "Uncited metric-like numbers found - evidence_grounding capped at 6"
+                    )
+
+                # Add feedback
+                if "actionable_feedback" not in result:
+                    result["actionable_feedback"] = []
+                result["actionable_feedback"].append(
+                    f"Add [M##] citations for {len(uncited_warnings)} uncited metric value(s)"
+                )
+
+                # Recalculate and reject
+                weighted_score = calculate_weighted_score(scores)
+                result["weighted_score"] = weighted_score
+                status = "REJECTED"
+                result["status"] = status
+
+            # ============================================================
+            # LAYER 2: Minimum Citation Count Enforcement
+            # ============================================================
+            citation_check = validate_minimum_citations(report, metric_ref, min_ratio=0.3)
+            if not citation_check["valid"]:
+                _add_activity_log(workflow_id, progress_store, "critic",
+                                  f"Citation coverage insufficient: {citation_check['message']}")
+
+                # Cap score severely - this indicates LLM ignored citation instructions
+                if scores.get("evidence_grounding", 0) > 3:
+                    scores["evidence_grounding"] = 3
+                    if "hard_floor_violations" not in result:
+                        result["hard_floor_violations"] = []
+                    result["hard_floor_violations"].append(
+                        f"Insufficient citation coverage ({citation_check['ratio']:.0%}) - evidence_grounding capped at 3"
+                    )
+
+                # Add feedback
+                if "actionable_feedback" not in result:
+                    result["actionable_feedback"] = []
+                result["actionable_feedback"].insert(0,
+                    f"CRITICAL: Add more [M##] citations. Current: {citation_check['citations_found']}/{citation_check['metrics_available']} ({citation_check['ratio']:.0%})"
+                )
+
+                # Recalculate and reject
+                weighted_score = calculate_weighted_score(scores)
+                result["weighted_score"] = weighted_score
+                status = "REJECTED"
+                result["status"] = status
+            else:
+                _add_activity_log(workflow_id, progress_store, "critic",
+                                  f"Citation coverage OK: {citation_check['message']}")
+
         else:
             _add_activity_log(workflow_id, progress_store, "critic",
                               "Warning: metric reference integrity check failed - skipping numeric validation")

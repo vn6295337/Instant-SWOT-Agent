@@ -595,39 +595,65 @@ def _extract_key_metrics(raw_data: str) -> dict:
             "net_income": _extract_temporal_metric(fin_data.get("net_income", {})),
         }
 
-    # Extract valuation
+    # Extract valuation (with temporal data)
     val = metrics.get("valuation", {})
     if val and "error" not in val:
         val_metrics = val.get("metrics", {})
         pe = val_metrics.get("pe_ratio", {})
+        # Get valuation date from sources or response-level
+        val_date = (
+            val.get("sources", {}).get("yahoo_finance", {}).get("regular_market_time")
+            or val.get("as_of")
+            or val.get("generated_at", "")[:10] if val.get("generated_at") else None
+        )
         extracted["valuation"] = {
-            "pe_trailing": pe.get("trailing") if isinstance(pe, dict) else pe,
-            "pe_forward": pe.get("forward") if isinstance(pe, dict) else None,
-            "pb_ratio": val_metrics.get("pb_ratio"),
-            "ps_ratio": val_metrics.get("ps_ratio"),
-            "ev_ebitda": val_metrics.get("ev_ebitda"),
+            "pe_trailing": {"value": pe.get("trailing") if isinstance(pe, dict) else pe, "end_date": val_date},
+            "pe_forward": {"value": pe.get("forward") if isinstance(pe, dict) else None, "end_date": val_date},
+            "pb_ratio": {"value": val_metrics.get("pb_ratio"), "end_date": val_date},
+            "ps_ratio": {"value": val_metrics.get("ps_ratio"), "end_date": val_date},
+            "ev_ebitda": {"value": val_metrics.get("ev_ebitda"), "end_date": val_date},
             "valuation_signal": val.get("overall_signal"),
+            "as_of": val_date,
         }
 
-    # Extract volatility
+    # Extract volatility (with temporal data)
     vol = metrics.get("volatility", {})
     if vol and "error" not in vol:
         vol_metrics = vol.get("metrics", {})
+        # Get response-level date as fallback
+        vol_date = vol.get("generated_at", "")[:10] if vol.get("generated_at") else None
+        # Extract each metric with its own date (or fallback to response date)
+        vix_data = vol_metrics.get("vix", {})
+        beta_data = vol_metrics.get("beta", {})
+        hv_data = vol_metrics.get("historical_volatility", {})
         extracted["volatility"] = {
-            "beta": vol_metrics.get("beta", {}).get("value"),
-            "vix": vol_metrics.get("vix", {}).get("value"),
-            "historical_volatility": vol_metrics.get("historical_volatility", {}).get("value"),
+            "beta": {"value": beta_data.get("value") if isinstance(beta_data, dict) else beta_data,
+                     "end_date": beta_data.get("date") or vol_date if isinstance(beta_data, dict) else vol_date},
+            "vix": {"value": vix_data.get("value") if isinstance(vix_data, dict) else vix_data,
+                    "end_date": vix_data.get("date") or vol_date if isinstance(vix_data, dict) else vol_date},
+            "historical_volatility": {"value": hv_data.get("value") if isinstance(hv_data, dict) else hv_data,
+                                      "end_date": hv_data.get("date") or vol_date if isinstance(hv_data, dict) else vol_date},
+            "as_of": vol_date,
         }
 
-    # Extract macro
+    # Extract macro (with temporal data)
     macro = metrics.get("macro", {})
     if macro and "error" not in macro:
         macro_metrics = macro.get("metrics", {})
+        # Each macro metric has its own date/period
+        gdp = macro_metrics.get("gdp_growth", {})
+        interest = macro_metrics.get("interest_rate", {})
+        inflation = macro_metrics.get("cpi_inflation", {})
+        unemp = macro_metrics.get("unemployment", {})
         extracted["macro"] = {
-            "gdp_growth": macro_metrics.get("gdp_growth", {}).get("value"),
-            "interest_rate": macro_metrics.get("interest_rate", {}).get("value"),
-            "inflation": macro_metrics.get("cpi_inflation", {}).get("value"),
-            "unemployment": macro_metrics.get("unemployment", {}).get("value"),
+            "gdp_growth": {"value": gdp.get("value") if isinstance(gdp, dict) else gdp,
+                          "end_date": gdp.get("date") or gdp.get("period") if isinstance(gdp, dict) else None},
+            "interest_rate": {"value": interest.get("value") if isinstance(interest, dict) else interest,
+                              "end_date": interest.get("date") if isinstance(interest, dict) else None},
+            "inflation": {"value": inflation.get("value") if isinstance(inflation, dict) else inflation,
+                          "end_date": inflation.get("date") or inflation.get("period") if isinstance(inflation, dict) else None},
+            "unemployment": {"value": unemp.get("value") if isinstance(unemp, dict) else unemp,
+                             "end_date": unemp.get("date") or unemp.get("period") if isinstance(unemp, dict) else None},
         }
 
     # Extract news with VADER sentiment
