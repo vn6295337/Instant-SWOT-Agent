@@ -1348,11 +1348,18 @@ Weighted Score: {critique_details.get('weighted_score', 0):.1f} / 10
 
 ### OUTPUT INSTRUCTIONS
 
-Produce a complete, revised SWOT analysis following the original template structure.
+Produce a complete, revised SWOT analysis using TABLE format:
+
+## Strengths
+| Ref | Metric | Insight |
+|-----|--------|---------|
+| M## | Metric: Value | Strategic insight in one sentence |
+
+(Same table format for Weaknesses, Opportunities, Threats)
 
 Do not:
+- Use bullet points or **bold** labels - use tables only
 - Include any preamble about revisions
-- Apologize or explain what you changed
 - Reference the Critic's feedback in your output
 
 Simply output the improved SWOT as a clean, final deliverable."""
@@ -1397,44 +1404,42 @@ def _build_analyzer_prompt(company: str, ticker: str, formatted_data: str,
 
 === OUTPUT FORMAT ===
 
-Produce a SWOT analysis with this exact structure:
+Produce a SWOT analysis using TABLES with this exact structure:
 
 ## Strengths
-For each (3-5 points):
-- **Finding:** [One sentence with metric value and citation, e.g., "Revenue of $394.3B [M01] shows..."]
-- **Strategic Implication:** [Why this matters]
-- **Durability:** [High/Medium/Low]
+| Ref | Metric | Insight |
+|-----|--------|---------|
+| M01 | Revenue: $394.3B | Strong market position with substantial scale |
+| M02 | Net Margin: 24.3% | High profitability indicates pricing power |
+
+(Include 3-5 rows per section)
 
 ## Weaknesses
-For each (3-5 points):
-- **Finding:** [One sentence with metric value and citation, e.g., "Debt/equity of 1.87 [M04] indicates..."]
-- **Severity:** [Critical/Moderate/Minor]
-- **Trend:** [Improving/Stable/Deteriorating]
-- **Remediation Levers:** [What could improve this]
+| Ref | Metric | Insight |
+|-----|--------|---------|
+| M04 | Debt/Equity: 1.87 | Elevated leverage increases financial risk |
 
 ## Opportunities
-For each (3-5 points):
-- **Catalyst:** [Description with metric citations where applicable]
-- **Timing:** [Near-term/Medium-term/Long-term]
-- **Execution Requirements:** [What must happen]
+| Ref | Metric | Insight |
+|-----|--------|---------|
+| M12 | GDP Growth: 4.3% | Favorable macro environment for expansion |
 
 ## Threats
-For each (3-5 points):
-- **Risk Factor:** [Description with metric citations where applicable]
-- **Probability:** [High/Medium/Low]
-- **Impact:** [Potential magnitude]
-- **Mitigation Options:** [Possible responses]
+| Ref | Metric | Insight |
+|-----|--------|---------|
+| M13 | Interest Rate: 3.72% | Higher borrowing costs may impact margins |
 
 ## Data Quality Notes
-- **Metrics Used:** [List key metrics analyzed]
-- **Data Gaps:** [Any unavailable metrics]
-- **Confidence Level:** [High/Medium/Low]
+- Metrics Used: [List key metrics analyzed]
+- Data Gaps: [Any unavailable metrics]
+- Confidence: [High/Medium/Low]
 
-CRITICAL CITATION REQUIREMENTS:
-1. Every numeric finding MUST include the reference ID in brackets: value [M##]
-2. Use EXACT values from the METRIC REFERENCE TABLE - do NOT round or estimate
-3. Example: "Revenue of $394,328,000,000 [M01] demonstrates strong market position"
-4. Citations will be automatically verified - mismatches cause rejection"""
+CRITICAL REQUIREMENTS:
+1. Use TABLE format as shown above - NOT bullet points
+2. Every row MUST cite a metric reference [M##] in the Ref column
+3. Metric column: Name and value (e.g., "Revenue: $394.3B")
+4. Insight column: One concise sentence explaining strategic implication
+5. Use EXACT values from the METRIC REFERENCE TABLE - do NOT round"""
 
     return prompt, metric_lookup, ref_hash
 
