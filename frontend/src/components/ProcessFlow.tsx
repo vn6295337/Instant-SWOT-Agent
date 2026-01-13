@@ -460,11 +460,13 @@ export function ProcessFlow({
             const isFailed = serverStatus === 'failed';
             const isPartial = serverStatus === 'partial';
             const isServerCompleted = serverStatus === 'completed';
+            const isServerExecuting = serverStatus === 'executing';
 
             // Determine visual status: failed/partial take precedence (persist for session)
             const status = isFailed ? 'failed' :
                           isPartial ? 'partial' :
                           isServerCompleted ? 'completed' :
+                          isServerExecuting ? 'executing' :
                           researcherStatus === 'executing' ? 'executing' : 'idle';
             const Icon = mcp.icon;
             return (
