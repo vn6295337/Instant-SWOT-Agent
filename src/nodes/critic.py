@@ -89,8 +89,8 @@ Required sections:
 - 9-10: Impeccable; 7-8: Well-structured; 5-6: Readable but dense; 3-4: Hard to follow; 1-2: Poorly organized
 
 ## PASS CONDITIONS (ALL must be met)
-1. Weighted average >= 7.0
-2. Evidence Grounding >= 7
+1. Weighted average >= 6.0
+2. Evidence Grounding >= 6
 3. Constraint Compliance >= 6
 4. No individual criterion below 5
 
@@ -127,7 +127,7 @@ CRITERION_WEIGHTS = {
 
 # Hard floor requirements
 HARD_FLOORS = {
-    "evidence_grounding": 7,
+    "evidence_grounding": 6,
     "constraint_compliance": 6,
 }
 
@@ -152,8 +152,8 @@ def check_pass_conditions(scores: dict, weighted_score: float) -> tuple:
     violations = []
 
     # Check weighted average threshold
-    if weighted_score < 7.0:
-        violations.append(f"Weighted score {weighted_score:.1f} < 7.0 threshold")
+    if weighted_score < 6.0:
+        violations.append(f"Weighted score {weighted_score:.1f} < 6.0 threshold")
 
     # Check hard floors
     for criterion, floor in HARD_FLOORS.items():
@@ -286,14 +286,14 @@ def critic_node(state, workflow_id=None, progress_store=None):
     Critic node with LLM-only weighted rubric evaluation.
 
     Evaluates SWOT output on 6 criteria with weighted scoring:
-    - Evidence Grounding (25%) - hard floor >= 7
+    - Evidence Grounding (25%) - hard floor >= 6
     - Constraint Compliance (20%) - hard floor >= 6
     - Specificity & Actionability (20%)
     - Strategic Insight (15%)
     - Completeness & Balance (10%)
     - Clarity & Structure (10%)
 
-    Pass requires: weighted avg >= 7.0, hard floors met, no score < 5
+    Pass requires: weighted avg >= 6.0, hard floors met, no score < 5
     """
     # Extract workflow_id and progress_store from state
     if workflow_id is None:

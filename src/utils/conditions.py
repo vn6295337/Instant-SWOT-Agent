@@ -9,11 +9,11 @@ def should_continue(state) -> Literal["exit", "retry"]:
     Exit conditions:
     - Error set (LLM providers failed - abort immediately)
     - Analyzer revision skipped (LLM failed but using fallback draft - exit gracefully)
-    - Score >= 7 (good quality)
+    - Score >= 6 (good quality)
     - Revision count > 3 (max attempts reached)
 
     Continue conditions:
-    - No error AND No revision skip AND Score < 7 AND Revisions <= 3
+    - No error AND No revision skip AND Score < 6 AND Revisions <= 3
     """
     # Abort immediately if error is set (critical failure)
     if state.get("error"):
@@ -27,7 +27,7 @@ def should_continue(state) -> Literal["exit", "retry"]:
     revision_count = state.get("revision_count", 0)
 
     # Exit if quality is good enough or max revisions exceeded
-    if current_score >= 7 or revision_count > 3:
+    if current_score >= 6 or revision_count > 3:
         return "exit"
 
     # Continue the loop for improvement

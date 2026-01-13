@@ -115,7 +115,7 @@ if __name__ == "__main__":
     print(f"   - Tracing: Enhanced LangSmith traces available")
     
     # Quality assessment
-    if isinstance(final_score, (int, float)) and final_score >= 7:
+    if isinstance(final_score, (int, float)) and final_score >= 6:
         print(f"   - Quality Assessment: ✅ PASSED ({final_score}/10)")
     else:
         print(f"   - Quality Assessment: ⚠️  ACCEPTABLE ({final_score} - max revisions reached)")
