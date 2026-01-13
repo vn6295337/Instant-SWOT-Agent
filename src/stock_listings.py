@@ -48,6 +48,27 @@ EXCLUDED_PATTERNS = [
     r'DEPOSITARY', r'ADR$', r'ADS$',
 ]
 
+# Suffixes to strip from company names for cleaner display
+NAME_SUFFIXES_TO_STRIP = [
+    " - Common Stock",
+    " - Class A Common Stock",
+    " - Class B Common Stock",
+    " - Class C Common Stock",
+    " - Ordinary Shares",
+    " - Class A Ordinary Shares",
+    " - Class B Ordinary Shares",
+    " Common Stock",
+    " Ordinary Shares",
+]
+
+
+def _clean_company_name(name: str) -> str:
+    """Strip common suffixes from company names for cleaner display."""
+    for suffix in NAME_SUFFIXES_TO_STRIP:
+        if name.endswith(suffix):
+            return name[:-len(suffix)]
+    return name
+
 
 def _is_common_stock(name: str, symbol: str) -> bool:
     """Filter to include only common stocks, exclude ETFs/funds/etc."""
@@ -128,7 +149,7 @@ def _parse_nasdaq_file(content: str, exchange: str) -> List[dict]:
 
         stocks.append({
             "symbol": symbol,
-            "name": name,
+            "name": _clean_company_name(name),
             "exchange": exchange
         })
 
