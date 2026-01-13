@@ -410,7 +410,11 @@ def critic_node(state, workflow_id=None, progress_store=None):
             # ============================================================
             # LAYER 3: Uncited Number Detection
             # ============================================================
-            uncited_warnings = validate_uncited_numbers(report, metric_ref)
+            # Only validate SWOT section (not Data Report tables which have raw metrics)
+            swot_section = report
+            if "## SWOT Analysis" in report:
+                swot_section = report[report.index("## SWOT Analysis"):]
+            uncited_warnings = validate_uncited_numbers(swot_section, metric_ref)
             if uncited_warnings:
                 _add_activity_log(workflow_id, progress_store, "critic",
                                   f"Uncited numbers: {len(uncited_warnings)} suspicious value(s) found")
