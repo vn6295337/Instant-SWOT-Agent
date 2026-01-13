@@ -511,20 +511,23 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
   const companyProfile = React.useMemo(() => {
     if (!rawData) return null
 
-    // Path 1: metrics.fundamentals contains SEC EDGAR data
+    // Path 1: metrics.fundamentals.sec_edgar.company (from FinancialsBasket)
     const fundamentals = rawData.metrics?.fundamentals as Record<string, unknown> | undefined
+    const secEdgar = fundamentals?.sec_edgar as Record<string, unknown> | undefined
+    const secCompany = secEdgar?.company as Record<string, unknown> | undefined
 
-    // Path 2: metrics.fundamentals.company (from orchestrator)
-    const company = fundamentals?.company as Record<string, unknown> | undefined
-
-    // Path 3: Root level sector from fundamentals
-    const rootSector = fundamentals?.sector as string | undefined
-
-    // Path 4: multi_source fallback
+    // Path 2: multi_source.fundamentals_all.sec_edgar.company (alternative path)
     const multiSource = rawData.multi_source as Record<string, unknown> | undefined
     const fundsAll = multiSource?.fundamentals_all as Record<string, unknown> | undefined
-    const secEdgarData = fundsAll?.sec_edgar as Record<string, unknown> | undefined
-    const secSector = secEdgarData?.sector as string | undefined
+    const fundsSecEdgar = fundsAll?.sec_edgar as Record<string, unknown> | undefined
+    const fundsCompany = fundsSecEdgar?.company as Record<string, unknown> | undefined
+
+    // Use whichever company object is available
+    const company = secCompany || fundsCompany
+
+    // Get sector from multiple possible locations
+    const secSector = secEdgar?.sector as string || fundsSecEdgar?.sector as string
+    const companySector = company?.sector as string
 
     // Extract business_address from SEC EDGAR company info
     const businessAddr = company?.business_address as Record<string, unknown> | undefined
@@ -550,7 +553,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
     }
 
     return {
-      sector: rootSector || secSector || company?.sector as string || legacyProfile?.sector as string || null,
+      sector: secSector || companySector || legacyProfile?.sector as string || null,
       industry: company?.sic_description as string || legacyProfile?.industry as string || null,
       hqLocation,
       employees: legacyProfile?.fullTimeEmployees as number || legacyProfile?.employees as number || null,
