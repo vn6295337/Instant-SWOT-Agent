@@ -9,11 +9,21 @@ import re
 from typing import Optional
 
 
-# Pattern to match citations like: $394.3B [M01], 25.3% [M02], 32.5 [M04]
-CITATION_PATTERN = re.compile(
+# Pattern to match citations in NEW format: [M01] Revenue: $394.3B - insight
+# Matches: [M##] followed by metric name, colon, and value
+CITATION_PATTERN_NEW = re.compile(
+    r'\[M(\d{2})\]\s*[^:]+:\s*(\$?[\d,]+\.?\d*[BMKTx%]?)',
+    re.IGNORECASE
+)
+
+# Pattern to match citations in OLD format: $394.3B [M01] (kept for backwards compatibility)
+CITATION_PATTERN_OLD = re.compile(
     r'([\d,$\.]+[BMK%]?)\s*\[M(\d{2})\]',
     re.IGNORECASE
 )
+
+# Combined pattern to find any [M##] reference (for citation counting)
+CITATION_REF_PATTERN = re.compile(r'\[M(\d{2})\]', re.IGNORECASE)
 
 
 def normalize_value(text: str) -> Optional[float]:
@@ -97,6 +107,10 @@ def extract_citations(text: str) -> list[dict]:
     """
     Extract all [M##] citations from text.
 
+    Supports both formats:
+    - NEW: [M01] Revenue: $394.3B - insight
+    - OLD: $394.3B [M01]
+
     Returns list of dicts:
     [
         {"ref_id": "M01", "cited_value": "$394.3B", "normalized": 394300000000.0},
@@ -104,16 +118,36 @@ def extract_citations(text: str) -> list[dict]:
     ]
     """
     citations = []
-    for match in CITATION_PATTERN.finditer(text):
+    seen_refs = set()
+
+    # Try NEW format first: [M##] Metric: Value
+    for match in CITATION_PATTERN_NEW.finditer(text):
+        ref_num = match.group(1)
+        cited_value = match.group(2)
+        ref_id = f"M{ref_num}"
+        if ref_id not in seen_refs:
+            normalized = normalize_value(cited_value)
+            citations.append({
+                "ref_id": ref_id,
+                "cited_value": cited_value,
+                "normalized": normalized
+            })
+            seen_refs.add(ref_id)
+
+    # Also try OLD format: Value [M##]
+    for match in CITATION_PATTERN_OLD.finditer(text):
         cited_value = match.group(1)
         ref_num = match.group(2)
         ref_id = f"M{ref_num}"
-        normalized = normalize_value(cited_value)
-        citations.append({
-            "ref_id": ref_id,
-            "cited_value": cited_value,
-            "normalized": normalized
-        })
+        if ref_id not in seen_refs:
+            normalized = normalize_value(cited_value)
+            citations.append({
+                "ref_id": ref_id,
+                "cited_value": cited_value,
+                "normalized": normalized
+            })
+            seen_refs.add(ref_id)
+
     return citations
 
 
@@ -262,11 +296,15 @@ def find_uncited_numbers(swot_text: str, metric_reference: dict) -> list[dict]:
     """
     uncited = []
 
-    # Get all cited positions to exclude
-    cited_matches = list(CITATION_PATTERN.finditer(swot_text))
+    # Get all cited positions to exclude (check both NEW and OLD patterns)
     cited_positions = set()
-    for match in cited_matches:
-        # Mark the entire citation span as "cited"
+
+    # NEW format: [M##] Metric: Value
+    for match in CITATION_PATTERN_NEW.finditer(swot_text):
+        cited_positions.update(range(match.start(), match.end()))
+
+    # OLD format: Value [M##]
+    for match in CITATION_PATTERN_OLD.finditer(swot_text):
         cited_positions.update(range(match.start(), match.end()))
 
     # Find all metric-like numbers
@@ -344,7 +382,7 @@ def validate_uncited_numbers(swot_text: str, metric_reference: dict) -> list[str
 
 def get_citation_count(swot_text: str) -> int:
     """Count the number of [M##] citations in the text."""
-    return len(CITATION_PATTERN.findall(swot_text))
+    return len(CITATION_REF_PATTERN.findall(swot_text))
 
 
 def validate_minimum_citations(swot_text: str, metric_reference: dict, min_ratio: float = 0.5) -> dict:
