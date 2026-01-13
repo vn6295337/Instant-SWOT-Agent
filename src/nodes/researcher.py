@@ -102,6 +102,11 @@ def researcher_node(state, workflow_id=None, progress_store=None):
                        end_date=end_date, fiscal_year=fiscal_year, form=form)
 
     try:
+        # Set all MCP servers to "executing" state before research starts
+        if workflow_id and progress_store:
+            from src.services.workflow_store import set_mcp_executing
+            set_mcp_executing(workflow_id)
+
         # Fetch via Research Gateway (A2A protocol)
         print("[Research Gateway] Calling Research Service via A2A...")
         result = asyncio.run(_fetch_via_research_gateway(

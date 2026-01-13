@@ -79,6 +79,13 @@ def add_metric(workflow_id: str, source: str, metric: str, value,
             WORKFLOWS[workflow_id]["mcp_status"][source] = "completed"
 
 
+def set_mcp_executing(workflow_id: str):
+    """Set all MCP servers to 'executing' state when research starts."""
+    if workflow_id in WORKFLOWS and "mcp_status" in WORKFLOWS[workflow_id]:
+        for source in WORKFLOWS[workflow_id]["mcp_status"]:
+            WORKFLOWS[workflow_id]["mcp_status"][source] = "executing"
+
+
 def _quarter_from_date(date_str: str) -> int:
     """Extract quarter number from a date string (YYYY-MM-DD)."""
     if not date_str:
