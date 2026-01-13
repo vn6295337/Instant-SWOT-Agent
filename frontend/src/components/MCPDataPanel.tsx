@@ -511,48 +511,51 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
   const companyProfile = React.useMemo(() => {
     if (!rawData) return null
 
-    // Try multiple sources for profile data
+    // Path 1: metrics.fundamentals contains SEC EDGAR data
+    const fundamentals = rawData.metrics?.fundamentals as Record<string, unknown> | undefined
+
+    // Path 2: metrics.fundamentals.company (from orchestrator)
+    const company = fundamentals?.company as Record<string, unknown> | undefined
+
+    // Path 3: Root level sector from fundamentals
+    const rootSector = fundamentals?.sector as string | undefined
+
+    // Path 4: multi_source fallback
     const multiSource = rawData.multi_source as Record<string, unknown> | undefined
-    const valAll = multiSource?.valuation_all as Record<string, unknown> | undefined
     const fundsAll = multiSource?.fundamentals_all as Record<string, unknown> | undefined
+    const secEdgarData = fundsAll?.sec_edgar as Record<string, unknown> | undefined
+    const secSector = secEdgarData?.sector as string | undefined
 
-    // Yahoo Finance profile (most complete)
-    const yfValData = valAll?.yahoo_finance as Record<string, unknown> | undefined
-    const yfProfile = yfValData?.data as Record<string, unknown> | undefined
-    const yfProfileNested = yfProfile?.profile as Record<string, unknown> | undefined
+    // Extract business_address from SEC EDGAR company info
+    const businessAddr = company?.business_address as Record<string, unknown> | undefined
 
-    // SEC EDGAR company info
-    const secData = fundsAll?.sec_edgar as Record<string, unknown> | undefined
-    const secInfo = secData?.data as Record<string, unknown> | undefined
-    const secCompanyInfo = secInfo?.company_info as Record<string, unknown> | undefined
-
-    // Legacy fallback
-    const legacyProfile = rawData.metrics?.valuation?.profile || rawData.company_info || {}
-
-    // Merge sources (Yahoo Finance primary, SEC secondary, legacy fallback)
-    const profile = { ...legacyProfile, ...secCompanyInfo, ...yfProfileNested, ...yfProfile }
-
-    // Build HQ location from available fields
+    // Build HQ location from business_address
     let hqLocation = null
-    const city = profile.city as string | undefined
-    const state = profile.state as string | undefined
-    const stateOrCountry = profile.stateOrCountry as string | undefined
-    const country = profile.country as string | undefined
+    if (businessAddr) {
+      const city = businessAddr.city as string
+      const state = businessAddr.state_or_country as string || businessAddr.stateOrCountry as string || businessAddr.state as string
+      if (city && state) {
+        hqLocation = `${city}, ${state}`
+      }
+    }
 
-    if (city && (state || stateOrCountry)) {
-      const stateVal = state || stateOrCountry
-      hqLocation = country && country !== 'United States' && country !== 'US'
-        ? `${city}, ${stateVal}, ${country}`
-        : `${city}, ${stateVal}`
+    // Legacy fallback for older data structures
+    const legacyProfile = rawData.company_info as Record<string, unknown> | undefined
+    if (!hqLocation && legacyProfile) {
+      const city = legacyProfile.city as string
+      const state = legacyProfile.state as string || legacyProfile.stateOrCountry as string
+      if (city && state) {
+        hqLocation = `${city}, ${state}`
+      }
     }
 
     return {
-      sector: profile.sector as string | null || null,
-      industry: profile.industry as string | null || null,
+      sector: rootSector || secSector || company?.sector as string || legacyProfile?.sector as string || null,
+      industry: company?.sic_description as string || legacyProfile?.industry as string || null,
       hqLocation,
-      employees: profile.fullTimeEmployees as number | null || profile.employees as number | null || null,
-      website: profile.website as string | null || null,
-      sicDescription: profile.sicDescription as string | null || null,
+      employees: legacyProfile?.fullTimeEmployees as number || legacyProfile?.employees as number || null,
+      website: legacyProfile?.website as string || null,
+      sicDescription: company?.sic_description as string || null,
     }
   }, [rawData])
 
