@@ -68,8 +68,15 @@ class LLMClient:
         """
         errors = []
         providers_failed = []
+        last_was_rate_limited = False
 
         for provider in self.providers:
+            # Add delay before trying next provider if previous one was rate limited
+            if last_was_rate_limited:
+                print(f"Waiting 10s before trying {provider['name']} (rate limit cooldown)...")
+                time.sleep(10)
+                last_was_rate_limited = False
+
             print(f"Attempting LLM call with {provider['name']}...")
             start_time = time.perf_counter()
 
@@ -91,11 +98,17 @@ class LLMClient:
                     errors.append(f"{provider['name']}: {error}")
                     providers_failed.append({"name": provider['name'], "error": error})
                     print(f"Provider {provider['name']} failed: {error}")
+                    # Check if this was a rate limit error
+                    if error and "429" in str(error):
+                        last_was_rate_limited = True
 
             except Exception as e:
                 errors.append(f"{provider['name']}: {str(e)}")
                 providers_failed.append({"name": provider['name'], "error": str(e)})
                 print(f"Provider {provider['name']} exception: {e}")
+                # Check if this was a rate limit error
+                if "429" in str(e):
+                    last_was_rate_limited = True
 
         return None, None, f"All LLM providers failed: {'; '.join(errors)}", providers_failed
 
