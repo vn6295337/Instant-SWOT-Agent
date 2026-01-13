@@ -759,8 +759,12 @@ def _format_metrics_for_prompt(extracted: dict, is_financial: bool = False) -> s
         elif isinstance(revenue, (int, float)):
             lines.append(f"- Revenue: ${revenue:,.0f}")
 
-        if fin.get("revenue_cagr_3yr"):
-            lines.append(f"- Revenue CAGR (3yr): {fin['revenue_cagr_3yr']:.1f}%")
+        cagr = fin.get("revenue_cagr_3yr")
+        if cagr:
+            if isinstance(cagr, dict) and cagr.get("value") is not None:
+                lines.append(f"- Revenue CAGR (3yr): {cagr['value']:.1f}%")
+            elif isinstance(cagr, (int, float)):
+                lines.append(f"- Revenue CAGR (3yr): {cagr:.1f}%")
 
         # Net margin with fiscal period
         net_margin = fin.get("net_margin", {})
