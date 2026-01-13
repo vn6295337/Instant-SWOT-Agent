@@ -44,14 +44,14 @@ class LLMClient:
             self.providers.append({
                 "name": "gemini",
                 "key": gemini_key,
-                "model": os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
+                "model": os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
             })
 
         if openrouter_key:
             self.providers.append({
                 "name": "openrouter",
                 "key": openrouter_key,
-                "model": os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free"),
+                "model": os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-120b:free"),
                 "url": "https://openrouter.ai/api/v1/chat/completions"
             })
 
