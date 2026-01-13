@@ -335,32 +335,6 @@ def _generate_data_report(raw_data: str, is_financial: bool = False) -> str:
     lines.append(f"# Data Report: {company} ({ticker})")
     lines.append("")
 
-    # ========== COMPANY DETAILS ==========
-    company_profile = _extract_company_profile(raw_data)
-    if company_profile:
-        lines.append("## Company Details")
-        lines.append("")
-        lines.append("| Field | Value |")
-        lines.append("|-------|-------|")
-        if company_profile.get("sector"):
-            lines.append(f"| Sector | {company_profile['sector']} |")
-        if company_profile.get("industry"):
-            lines.append(f"| Industry | {company_profile['industry']} |")
-        if company_profile.get("business_address"):
-            lines.append(f"| Headquarters | {company_profile['business_address']} |")
-        if company_profile.get("employees"):
-            employees = company_profile['employees']
-            if isinstance(employees, int):
-                employees = f"{employees:,}"
-            lines.append(f"| Employees | {employees} |")
-        if company_profile.get("website"):
-            lines.append(f"| Website | {company_profile['website']} |")
-        if company_profile.get("cik"):
-            lines.append(f"| CIK | {company_profile['cik']} |")
-        if company_profile.get("sic_description"):
-            lines.append(f"| SIC | {company_profile['sic_description']} |")
-        lines.append("")
-
     # ========== FINANCIALS ==========
     fin_all = multi_source.get("fundamentals_all", {})
     sec_data = fin_all.get("sec_edgar", {}).get("data", {})
