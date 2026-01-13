@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 
 # Retry configuration for rate limits
 MAX_RETRIES = 3
-INITIAL_BACKOFF = 5  # seconds (backoffs: 5s, 10s, 20s)
+INITIAL_BACKOFF = 10  # seconds (backoffs: 10s, 20s, 40s)
 
 
 class LLMClient:
@@ -98,17 +98,15 @@ class LLMClient:
                     errors.append(f"{provider['name']}: {error}")
                     providers_failed.append({"name": provider['name'], "error": error})
                     print(f"Provider {provider['name']} failed: {error}")
-                    # Check if this was a rate limit error
-                    if error and "429" in str(error):
-                        last_was_rate_limited = True
+                    # Always delay before next provider fallback
+                    last_was_rate_limited = True
 
             except Exception as e:
                 errors.append(f"{provider['name']}: {str(e)}")
                 providers_failed.append({"name": provider['name'], "error": str(e)})
                 print(f"Provider {provider['name']} exception: {e}")
-                # Check if this was a rate limit error
-                if "429" in str(e):
-                    last_was_rate_limited = True
+                # Always delay before next provider fallback
+                last_was_rate_limited = True
 
         return None, None, f"All LLM providers failed: {'; '.join(errors)}", providers_failed
 
