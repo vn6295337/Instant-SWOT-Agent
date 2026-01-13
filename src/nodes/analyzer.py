@@ -930,7 +930,13 @@ def _format_metric_for_reference(key: str, value, temporal_info: dict = None) ->
     # Format value based on metric type
     if key in ("revenue", "net_income", "free_cash_flow", "market_cap", "enterprise_value",
                "total_assets", "total_liabilities", "stockholders_equity", "operating_cash_flow"):
-        formatted = f"${value:,.0f}"
+        # Use human-readable format with B/M suffixes
+        if abs(value) >= 1e9:
+            formatted = f"${value/1e9:.1f}B"
+        elif abs(value) >= 1e6:
+            formatted = f"${value/1e6:.0f}M"
+        else:
+            formatted = f"${value:,.0f}"
     elif key in ("net_margin", "gross_margin", "operating_margin", "gdp_growth",
                  "inflation", "unemployment", "historical_volatility", "revenue_cagr_3yr"):
         formatted = f"{value:.1f}%"

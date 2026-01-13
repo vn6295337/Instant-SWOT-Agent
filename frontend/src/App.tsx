@@ -105,8 +105,9 @@ const parseSwotLine = (line: string): SwotRow | null => {
   const cleaned = cleanMarkdown(line)
 
   // Pattern: [M##] Metric: Value - Insight
+  // Use " - " (space-hyphen-space) to avoid matching hyphens in dates like "2024-12-31"
   // Also handle: [M##] Metric: Value | Insight (pipe separator)
-  const match = cleaned.match(/^\[?(M\d+)\]?\s*(.+?)\s*[-|]\s*(.+)$/i)
+  const match = cleaned.match(/^\[?(M\d+)\]?\s*(.+?)\s+[-|]\s+(.+)$/i)
   if (match) {
     return {
       ref: match[1],
@@ -116,7 +117,7 @@ const parseSwotLine = (line: string): SwotRow | null => {
   }
 
   // Fallback: no ref pattern, just "Metric: Value - Insight"
-  const fallback = cleaned.match(/^(.+?)\s*[-|]\s*(.+)$/)
+  const fallback = cleaned.match(/^(.+?)\s+[-|]\s+(.+)$/)
   if (fallback) {
     return {
       ref: '',
