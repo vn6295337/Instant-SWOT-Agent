@@ -159,12 +159,11 @@ def _extract_company_profile(raw_data: str) -> dict:
     profile = {}
 
     # Try SEC EDGAR for business address (most authoritative)
-    # Handle both structures (with and without "sources" wrapper)
+    # Handle both old format (with "data" wrapper) and new flat format
     fin_all = multi_source.get("fundamentals_all", {})
-    if "sources" in fin_all:
-        sec_data = fin_all.get("sources", {}).get("sec_edgar", {}).get("data", {})
-    else:
-        sec_data = fin_all.get("sec_edgar", {}).get("data", {})
+    sec_source = fin_all.get("sec_edgar", {})
+    # Check if old format with "data" wrapper or new flat format
+    sec_data = sec_source.get("data", sec_source) if "data" in sec_source else sec_source
     sec_profile = sec_data.get("company_info", {}) or sec_data.get("profile", {})
 
     if sec_profile:
@@ -178,15 +177,14 @@ def _extract_company_profile(raw_data: str) -> dict:
         profile["sic_description"] = sec_profile.get("sicDescription", "")
 
     # Try Yahoo Finance for sector/industry and other details
-    yf_val = multi_source.get("valuation_all", {}).get("yahoo_finance", {}).get("data", {})
+    yf_val_source = multi_source.get("valuation_all", {}).get("yahoo_finance", {})
+    yf_val = yf_val_source.get("data", yf_val_source) if "data" in yf_val_source else yf_val_source
     yf_profile = yf_val.get("profile", {})
 
     if not yf_profile:
-        # Handle both structures (with and without "sources" wrapper)
-        if "sources" in fin_all:
-            yf_fund = fin_all.get("sources", {}).get("yahoo_finance", {}).get("data", {})
-        else:
-            yf_fund = fin_all.get("yahoo_finance", {}).get("data", {})
+        # Try fundamentals yahoo_finance
+        yf_fund_source = fin_all.get("yahoo_finance", {})
+        yf_fund = yf_fund_source.get("data", yf_fund_source) if "data" in yf_fund_source else yf_fund_source
         yf_profile = yf_fund.get("profile", {})
 
     if yf_profile:
@@ -226,6 +224,16 @@ def _extract_temporal_metric(metric_data: dict) -> dict:
         "end_date": metric_data.get("end_date"),
         "fiscal_year": metric_data.get("fiscal_year"),
         "form": metric_data.get("form"),  # "10-K" (annual) or "10-Q" (quarterly)
+    }
+
+
+def _extract_valuation_metric(metric_data: dict) -> dict:
+    """Extract valuation metric with as_of date (new MCP structure)."""
+    if not isinstance(metric_data, dict):
+        return {"value": metric_data}
+    return {
+        "value": metric_data.get("value"),
+        "end_date": metric_data.get("as_of"),  # MCP uses "as_of" for valuation
     }
 
 
@@ -346,13 +354,11 @@ def _generate_data_report(raw_data: str, is_financial: bool = False) -> str:
 
     # ========== FINANCIALS ==========
     fin_all = multi_source.get("fundamentals_all", {})
-    # Handle both structures (with and without "sources" wrapper)
-    if "sources" in fin_all:
-        sec_data = fin_all.get("sources", {}).get("sec_edgar", {}).get("data", {})
-        yf_data = fin_all.get("sources", {}).get("yahoo_finance", {}).get("data", {})
-    else:
-        sec_data = fin_all.get("sec_edgar", {}).get("data", {})
-        yf_data = fin_all.get("yahoo_finance", {}).get("data", {})
+    # Handle both old format (with "data" wrapper) and new flat format
+    sec_source = fin_all.get("sec_edgar", {})
+    sec_data = sec_source.get("data", sec_source) if "data" in sec_source else sec_source
+    yf_source = fin_all.get("yahoo_finance", {})
+    yf_data = yf_source.get("data", yf_source) if "data" in yf_source else yf_source
 
     if sec_data or yf_data:
         lines.append("## Financials")
@@ -393,8 +399,10 @@ def _generate_data_report(raw_data: str, is_financial: bool = False) -> str:
 
     # ========== VALUATION ==========
     val_all = multi_source.get("valuation_all", {})
-    yf_val = val_all.get("yahoo_finance", {}).get("data", {})
-    av_val = val_all.get("alpha_vantage", {}).get("data", {})
+    yf_val_src = val_all.get("yahoo_finance", {})
+    yf_val = yf_val_src.get("data", yf_val_src) if "data" in yf_val_src else yf_val_src
+    av_val_src = val_all.get("alpha_vantage", {})
+    av_val = av_val_src.get("data", av_val_src) if "data" in av_val_src else av_val_src
 
     if yf_val or av_val:
         lines.append("## Valuation")
@@ -443,8 +451,10 @@ def _generate_data_report(raw_data: str, is_financial: bool = False) -> str:
         ctx = vol_all.get("market_volatility_context", {})
         vix = ctx.get("vix", {})
         vxn = ctx.get("vxn", {})
-        yf_vol = vol_all.get("yahoo_finance", {}).get("data", {})
-        av_vol = vol_all.get("alpha_vantage", {}).get("data", {})
+        yf_vol_src = vol_all.get("yahoo_finance", {})
+        yf_vol = yf_vol_src.get("data", yf_vol_src) if "data" in yf_vol_src else yf_vol_src
+        av_vol_src = vol_all.get("alpha_vantage", {})
+        av_vol = av_vol_src.get("data", av_vol_src) if "data" in av_vol_src else av_vol_src
 
         # VIX
         if vix.get("value"):
@@ -482,8 +492,10 @@ def _generate_data_report(raw_data: str, is_financial: bool = False) -> str:
         lines.append("| Metric | Period | BEA/BLS | FRED |")
         lines.append("|--------|--------|---------|------|")
 
-        bea_bls = macro_all.get("bea_bls", {}).get("data", {})
-        fred = macro_all.get("fred", {}).get("data", {})
+        bea_src = macro_all.get("bea_bls", {})
+        bea_bls = bea_src.get("data", bea_src) if "data" in bea_src else bea_src
+        fred_src = macro_all.get("fred", {})
+        fred = fred_src.get("data", fred_src) if "data" in fred_src else fred_src
 
         # GDP Growth
         gdp_p = bea_bls.get("gdp_growth", {}) or {}
@@ -511,83 +523,62 @@ def _generate_data_report(raw_data: str, is_financial: bool = False) -> str:
 
     # ========== NEWS ==========
     news = metrics.get("news", {})
-    # Tavily returns results in 'results', other sources use 'articles'
-    articles = news.get("results", []) or news.get("articles", []) if news else []
+    if news:
+        # New format: {tavily: [...], nyt: [...], newsapi: [...]}
+        all_articles = []
+        for source in ["tavily", "nyt", "newsapi"]:
+            for article in news.get(source, []):
+                all_articles.append({**article, "source": source})
 
-    if articles:
-        lines.append("## News Articles")
-        lines.append(f"Source: {news.get('source', 'Tavily')}")
-        lines.append("")
-        lines.append("| # | Title | Source | URL |")
-        lines.append("|---|-------|--------|-----|")
-
-        for i, article in enumerate(articles[:10], 1):
-            title = article.get("title", "Untitled")
-            source = article.get("source", "Unknown")
-            url = article.get("url", article.get("link", ""))
-            lines.append(f"| {i} | {title} | {source} | {url} |")
-
-        lines.append("")
+        if all_articles:
+            lines.append("## News Articles")
+            lines.append("")
+            lines.append("| # | Title | Source | URL |")
+            lines.append("|---|-------|--------|-----|")
+            for i, article in enumerate(all_articles[:10], 1):
+                title = article.get("title", "Untitled")
+                source = article.get("source", "Unknown")
+                url = article.get("url", "")
+                lines.append(f"| {i} | {title} | {source} | {url} |")
+            lines.append("")
 
     # ========== SENTIMENT ==========
     sentiment = metrics.get("sentiment", {})
     if sentiment:
-        composite_score = sentiment.get("composite_score", "N/A")
-        interpretation = sentiment.get("overall_interpretation", "")
-
-        # Try both old format (finnhub_sentiment) and new format (metrics.finnhub)
-        finnhub = sentiment.get("finnhub_sentiment", {}) or sentiment.get("metrics", {}).get("finnhub", {})
-        reddit = sentiment.get("reddit_sentiment", {}) or sentiment.get("metrics", {}).get("reddit", {})
-
-        finn_articles = finnhub.get("articles", [])
-        finn_score = finnhub.get("score", finnhub.get("composite_score", "N/A"))
-        finn_count = finnhub.get("articles_analyzed", len(finn_articles))
-
-        reddit_posts = reddit.get("posts", [])
-        reddit_score = reddit.get("score", reddit.get("composite_score", "N/A"))
-        reddit_count = reddit.get("posts_analyzed", len(reddit_posts))
+        # New format: {finnhub: [...], reddit: [...]}
+        finnhub_articles = sentiment.get("finnhub", [])
+        reddit_posts = sentiment.get("reddit", [])
 
         lines.append("## Sentiment Analysis")
-        lines.append(f"Composite Score: {composite_score}/100 - {interpretation}")
         lines.append("")
-        lines.append("| Source | Score | Items Analyzed |")
-        lines.append("|--------|-------|----------------|")
-        lines.append(f"| Finnhub | {finn_score}/100 | {finn_count} articles |")
-        lines.append(f"| Reddit | {reddit_score}/100 | {reddit_count} posts |")
+        lines.append("| Source | Items |")
+        lines.append("|--------|-------|")
+        lines.append(f"| Finnhub | {len(finnhub_articles)} articles |")
+        lines.append(f"| Reddit | {len(reddit_posts)} posts |")
         lines.append("")
 
-        # Show individual articles if available
-        if finn_articles:
+        # Show Finnhub articles
+        if finnhub_articles:
             lines.append("### Finnhub Articles")
             lines.append("")
-            lines.append("| # | Headline | Sentiment | URL |")
-            lines.append("|---|----------|-----------|-----|")
-            for i, article in enumerate(finn_articles[:10], 1):
-                headline = article.get("headline", article.get("title", "Untitled"))
-                sent = article.get("sentiment_score", article.get("sentiment", "N/A"))
-                if isinstance(sent, (int, float)):
-                    sent = f"{sent:+.2f}"
-                url = article.get("url", article.get("link", ""))
-                lines.append(f"| {i} | {headline} | {sent} | {url} |")
+            lines.append("| # | Title | URL |")
+            lines.append("|---|-------|-----|")
+            for i, article in enumerate(finnhub_articles[:10], 1):
+                title = article.get("title", "Untitled")
+                url = article.get("url", "")
+                lines.append(f"| {i} | {title} | {url} |")
             lines.append("")
 
-        # Show Reddit posts if available
+        # Show Reddit posts
         if reddit_posts:
             lines.append("### Reddit Posts")
             lines.append("")
-            lines.append("| # | Title | Subreddit | Upvotes | Sentiment | URL |")
-            lines.append("|---|-------|-----------|---------|-----------|-----|")
+            lines.append("| # | Title | URL |")
+            lines.append("|---|-------|-----|")
             for i, post in enumerate(reddit_posts[:10], 1):
                 title = post.get("title", "Untitled")
-                subreddit = post.get("subreddit", "r/unknown")
-                upvotes = post.get("upvotes", post.get("score", 0))
-                sent = post.get("sentiment_score", post.get("sentiment", "N/A"))
-                if isinstance(sent, (int, float)):
-                    sent = f"{sent:+.2f}"
-                url = post.get("url", post.get("permalink", ""))
-                if url and not url.startswith("http"):
-                    url = f"https://reddit.com{url}"
-                lines.append(f"| {i} | {title} | {subreddit} | {upvotes} | {sent} | {url} |")
+                url = post.get("url", "")
+                lines.append(f"| {i} | {title} | {url} |")
             lines.append("")
 
     lines.append("---")
@@ -621,20 +612,18 @@ def _extract_key_metrics(raw_data: str) -> dict:
 
     # Extract fundamentals with temporal data
     # Structure varies:
+    # Formats supported:
     # - Old: {"sec_edgar": {"data": {...}}, "yahoo_finance": {"data": {...}}}
-    # - New: {"sources": {"sec_edgar": {"data": {...}}, "yahoo_finance": {"data": {...}}}}
+    # - New (flat): {"sec_edgar": {...}, "yahoo_finance": {...}}
     fin = metrics.get("fundamentals", {})
     if not fin or "error" in fin:
         fin = data.get("multi_source", {}).get("fundamentals_all", {})
     if fin and "error" not in fin:
-        # Handle both structures (with and without "sources" wrapper)
-        if "sources" in fin:
-            sources = fin.get("sources", {})
-            sec_data = sources.get("sec_edgar", {}).get("data", {})
-            yf_data = sources.get("yahoo_finance", {}).get("data", {})
-        else:
-            sec_data = fin.get("sec_edgar", {}).get("data", {})
-            yf_data = fin.get("yahoo_finance", {}).get("data", {})
+        # Handle both old format (with "data" wrapper) and new flat format
+        sec_source = fin.get("sec_edgar", {})
+        sec_data = sec_source.get("data", sec_source) if "data" in sec_source else sec_source
+        yf_source = fin.get("yahoo_finance", {})
+        yf_data = yf_source.get("data", yf_source) if "data" in yf_source else yf_source
         # Merge with SEC as primary
         fin_data = {**yf_data, **sec_data}  # SEC overwrites YF where both exist
         extracted["fundamentals"] = {
@@ -650,98 +639,96 @@ def _extract_key_metrics(raw_data: str) -> dict:
         }
 
     # Extract valuation (with temporal data)
-    # Structure: {"yahoo_finance": {"data": {...}, "regular_market_time": "..."}}
+    # Handle both old format (with "data" wrapper) and new flat format
     val = metrics.get("valuation", {})
     if not val or "error" in val:
         val = data.get("multi_source", {}).get("valuation_all", {})
     if val and "error" not in val:
-        yf_val = val.get("yahoo_finance", {}).get("data", {})
-        val_date = val.get("yahoo_finance", {}).get("regular_market_time")
+        yf_source = val.get("yahoo_finance", {})
+        yf_val = yf_source.get("data", yf_source) if "data" in yf_source else yf_source
         extracted["valuation"] = {
-            "pe_trailing": {"value": yf_val.get("trailing_pe"), "end_date": val_date},
-            "pe_forward": {"value": yf_val.get("forward_pe"), "end_date": val_date},
-            "pb_ratio": {"value": yf_val.get("pb_ratio"), "end_date": val_date},
-            "ps_ratio": {"value": yf_val.get("ps_ratio"), "end_date": val_date},
-            "ev_ebitda": {"value": yf_val.get("ev_ebitda"), "end_date": val_date},
+            "pe_trailing": _extract_valuation_metric(yf_val.get("trailing_pe", {})),
+            "pe_forward": _extract_valuation_metric(yf_val.get("forward_pe", {})),
+            "pb_ratio": _extract_valuation_metric(yf_val.get("price_to_book", {})),
+            "ps_ratio": _extract_valuation_metric(yf_val.get("price_to_sales", {})),
+            "ev_ebitda": _extract_valuation_metric(yf_val.get("ev_ebitda", {})),
             "valuation_signal": val.get("overall_signal"),
-            "as_of": val_date,
         }
 
     # Extract volatility (with temporal data)
-    # Structure: {"yahoo_finance": {"data": {...}}, "market_volatility_context": {"vix": {...}, "vxn": {...}}}
+    # New structure: {fred: {vix: {...}}, yahoo_finance: {beta: {...}}}
     vol = metrics.get("volatility", {})
     if not vol or "error" in vol:
         vol = data.get("multi_source", {}).get("volatility_all", {})
     if vol and "error" not in vol:
-        yf_vol = vol.get("yahoo_finance", {}).get("data", {})
-        mkt_ctx = vol.get("market_volatility_context", {})
-        vol_date = vol.get("generated_at", "")[:10] if vol.get("generated_at") else None
-        vix_data = mkt_ctx.get("vix", {})
-        beta_data = yf_vol.get("beta", {})
-        hv_data = yf_vol.get("historical_volatility", {})
+        # Yahoo Finance data (beta, historical volatility)
+        yf_vol_source = vol.get("yahoo_finance", {})
+        yf_vol = yf_vol_source.get("data", yf_vol_source) if "data" in yf_vol_source else yf_vol_source
+        # FRED data (VIX)
+        fred_source = vol.get("fred", {})
+        fred_vol = fred_source.get("data", fred_source) if "data" in fred_source else fred_source
+
         extracted["volatility"] = {
-            "beta": {"value": beta_data.get("value") if isinstance(beta_data, dict) else beta_data,
-                     "end_date": beta_data.get("date") or vol_date if isinstance(beta_data, dict) else vol_date},
-            "vix": {"value": vix_data.get("value") if isinstance(vix_data, dict) else vix_data,
-                    "end_date": vix_data.get("date") or vol_date if isinstance(vix_data, dict) else vol_date},
-            "historical_volatility": {"value": hv_data.get("value") if isinstance(hv_data, dict) else hv_data,
-                                      "end_date": hv_data.get("date") or vol_date if isinstance(hv_data, dict) else vol_date},
-            "as_of": vol_date,
+            "beta": _extract_valuation_metric(yf_vol.get("beta", {})),
+            "vix": _extract_valuation_metric(fred_vol.get("vix", {})),
+            "historical_volatility": _extract_valuation_metric(yf_vol.get("historical_volatility", {})),
         }
 
     # Extract macro (with temporal data)
-    # Structure: {"bea_bls": {"data": {...}}, "fred": {"data": {...}}}
+    # New structure: {bea: {gdp_growth: {...}}, bls: {unemployment_rate: {...}}, fred: {fed_funds_rate: {...}}}
     macro = metrics.get("macro", {})
     if not macro or "error" in macro:
         macro = data.get("multi_source", {}).get("macro_all", {})
     if macro and "error" not in macro:
-        bea_bls = macro.get("bea_bls", {}).get("data", {})
-        fred = macro.get("fred", {}).get("data", {})
-        # Merge sources (BEA/BLS primary, FRED fallback)
-        macro_data = {**fred, **bea_bls}
-        gdp = macro_data.get("gdp_growth", {})
-        interest = macro_data.get("interest_rate", {})
-        inflation = macro_data.get("cpi_inflation", {})
-        unemp = macro_data.get("unemployment", {})
+        # BEA data (GDP)
+        bea_source = macro.get("bea", {})
+        bea = bea_source.get("data", bea_source) if "data" in bea_source else bea_source
+        # BLS data (unemployment, CPI)
+        bls_source = macro.get("bls", {})
+        bls = bls_source.get("data", bls_source) if "data" in bls_source else bls_source
+        # FRED data (interest rates)
+        fred_source = macro.get("fred", {})
+        fred = fred_source.get("data", fred_source) if "data" in fred_source else fred_source
+
         extracted["macro"] = {
-            "gdp_growth": {"value": gdp.get("value") if isinstance(gdp, dict) else gdp,
-                          "end_date": gdp.get("date") or gdp.get("period") if isinstance(gdp, dict) else None},
-            "interest_rate": {"value": interest.get("value") if isinstance(interest, dict) else interest,
-                              "end_date": interest.get("date") if isinstance(interest, dict) else None},
-            "inflation": {"value": inflation.get("value") if isinstance(inflation, dict) else inflation,
-                          "end_date": inflation.get("date") or inflation.get("period") if isinstance(inflation, dict) else None},
-            "unemployment": {"value": unemp.get("value") if isinstance(unemp, dict) else unemp,
-                             "end_date": unemp.get("date") or unemp.get("period") if isinstance(unemp, dict) else None},
+            "gdp_growth": _extract_valuation_metric(bea.get("gdp_growth", {})),
+            "interest_rate": _extract_valuation_metric(fred.get("fed_funds_rate", {})),
+            "inflation": _extract_valuation_metric(bls.get("cpi_yoy", {})),
+            "unemployment": _extract_valuation_metric(bls.get("unemployment_rate", {})),
         }
 
     # Extract news with VADER sentiment
+    # New format: {tavily: [...], nyt: [...], newsapi: [...]}
     news = metrics.get("news", {})
     if news and "error" not in news:
-        articles = news.get("articles", [])
-        headlines = [a.get("title", "") for a in articles if a.get("title")]
+        all_articles = []
+        for source in ["tavily", "nyt", "newsapi"]:
+            all_articles.extend(news.get(source, []))
+
+        headlines = [a.get("title", "") for a in all_articles if a.get("title")]
 
         # Compute VADER sentiment on headlines
         vader_news = _compute_vader_sentiment(headlines)
 
         extracted["news"] = {
-            "article_count": len(articles),
-            "headlines": [a.get("title", "")[:100] for a in articles[:5]],
+            "article_count": len(all_articles),
+            "headlines": [a.get("title", "")[:100] for a in all_articles[:5]],
             "vader_sentiment": vader_news,
         }
 
     # Extract sentiment with VADER on reddit posts
+    # New format: {finnhub: [...], reddit: [...]}
     sent = metrics.get("sentiment", {})
     if sent and "error" not in sent:
-        # Get reddit posts for VADER analysis
-        reddit_posts = sent.get("reddit_posts", [])
+        reddit_posts = sent.get("reddit", [])
         reddit_titles = [p.get("title", "") for p in reddit_posts if p.get("title")]
 
         # Compute VADER sentiment on reddit titles
         vader_reddit = _compute_vader_sentiment(reddit_titles)
 
         extracted["sentiment"] = {
-            "composite_score": sent.get("composite_score"),
-            "overall_category": sent.get("overall_swot_category"),
+            "finnhub_count": len(sent.get("finnhub", [])),
+            "reddit_count": len(reddit_posts),
             "vader_reddit": vader_reddit,
         }
 
