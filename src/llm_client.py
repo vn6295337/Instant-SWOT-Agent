@@ -6,12 +6,11 @@ Adopts pattern from Enterprise-AI-Gateway for resilient LLM access.
 import os
 import time
 import requests
-from requests.exceptions import HTTPError
 from typing import Optional, Tuple
 
-# Retry configuration for rate limits
-MAX_RETRIES = 3
-INITIAL_BACKOFF = 10  # seconds (backoffs: 10s, 20s, 40s)
+# Retry configuration - rotate through providers instead of consecutive retries
+MAX_ROUNDS = 3  # Number of times to cycle through all providers
+PROVIDER_DELAY = 10  # seconds between provider attempts
 
 
 class LLMClient:
@@ -60,7 +59,10 @@ class LLMClient:
 
     def query(self, prompt: str, temperature: float = 0, max_tokens: int = 2048) -> Tuple[Optional[str], Optional[str], Optional[str], list]:
         """
-        Query LLM with cascading fallback across providers.
+        Query LLM with rotating fallback across providers.
+
+        Instead of retrying same provider consecutively, rotates:
+        Groq → Gemini → OpenRouter → Groq → Gemini → OpenRouter → ...
 
         Returns:
             Tuple of (response_content, provider_used, error_message, providers_failed)
@@ -68,77 +70,53 @@ class LLMClient:
         """
         errors = []
         providers_failed = []
-        last_was_rate_limited = False
+        is_first_attempt = True
 
-        for provider in self.providers:
-            # Add delay before trying next provider if previous one was rate limited
-            if last_was_rate_limited:
-                print(f"Waiting 10s before trying {provider['name']} (rate limit cooldown)...")
-                time.sleep(10)
-                last_was_rate_limited = False
+        # Rotate through providers for MAX_ROUNDS cycles
+        for round_num in range(MAX_ROUNDS):
+            for provider in self.providers:
+                # Add delay between attempts (skip first attempt)
+                if not is_first_attempt:
+                    print(f"Waiting {PROVIDER_DELAY}s before trying {provider['name']} (round {round_num + 1})...")
+                    time.sleep(PROVIDER_DELAY)
+                is_first_attempt = False
 
-            print(f"Attempting LLM call with {provider['name']}...")
-            start_time = time.perf_counter()
+                print(f"Attempting LLM call with {provider['name']} (round {round_num + 1}/{MAX_ROUNDS})...")
+                start_time = time.perf_counter()
 
-            try:
-                content, error = self._call_provider(
-                    provider=provider,
-                    prompt=prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens
-                )
-                latency_ms = int((time.perf_counter() - start_time) * 1000)
+                try:
+                    content, error = self._call_provider(
+                        provider=provider,
+                        prompt=prompt,
+                        temperature=temperature,
+                        max_tokens=max_tokens
+                    )
+                    latency_ms = int((time.perf_counter() - start_time) * 1000)
 
-                if content:
-                    print(f"Success with {provider['name']} ({latency_ms}ms)")
-                    # Return provider:model format for detailed logging
-                    provider_info = f"{provider['name']}:{provider['model']}"
-                    return content, provider_info, None, providers_failed
-                else:
-                    errors.append(f"{provider['name']}: {error}")
-                    providers_failed.append({"name": provider['name'], "error": error})
-                    print(f"Provider {provider['name']} failed: {error}")
-                    # Always delay before next provider fallback
-                    last_was_rate_limited = True
+                    if content:
+                        print(f"Success with {provider['name']} ({latency_ms}ms)")
+                        provider_info = f"{provider['name']}:{provider['model']}"
+                        return content, provider_info, None, providers_failed
+                    else:
+                        errors.append(f"{provider['name']}: {error}")
+                        providers_failed.append({"name": provider['name'], "error": error})
+                        print(f"Provider {provider['name']} failed: {error}")
 
-            except Exception as e:
-                errors.append(f"{provider['name']}: {str(e)}")
-                providers_failed.append({"name": provider['name'], "error": str(e)})
-                print(f"Provider {provider['name']} exception: {e}")
-                # Always delay before next provider fallback
-                last_was_rate_limited = True
+                except Exception as e:
+                    errors.append(f"{provider['name']}: {str(e)}")
+                    providers_failed.append({"name": provider['name'], "error": str(e)})
+                    print(f"Provider {provider['name']} exception: {e}")
 
-        return None, None, f"All LLM providers failed: {'; '.join(errors)}", providers_failed
+        return None, None, f"All LLM providers failed after {MAX_ROUNDS} rounds: {'; '.join(errors)}", providers_failed
 
-    def _request_with_retry(self, url: str, headers: dict, payload: dict, provider_name: str) -> requests.Response:
-        """Make HTTP request with exponential backoff retry on 429 rate limit."""
-        last_error = None
-
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = requests.post(url, headers=headers, json=payload, timeout=30)
-                response.raise_for_status()
-                return response
-            except HTTPError as e:
-                if e.response is not None and e.response.status_code == 429:
-                    last_error = e
-                    if attempt < MAX_RETRIES - 1:
-                        backoff = INITIAL_BACKOFF * (2 ** attempt)  # 5s, 10s, 20s
-                        print(f"Rate limited by {provider_name}, retrying in {backoff}s (attempt {attempt + 1}/{MAX_RETRIES})...")
-                        time.sleep(backoff)
-                        continue
-                # Re-raise non-429 errors or final 429
-                raise
-            except Exception:
-                raise
-
-        # Should not reach here, but just in case
-        if last_error:
-            raise last_error
-        raise Exception(f"Request failed after {MAX_RETRIES} attempts")
+    def _make_request(self, url: str, headers: dict, payload: dict, provider_name: str) -> requests.Response:
+        """Make HTTP request to provider (no internal retry - rotation handles retries)."""
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        return response
 
     def _call_provider(self, provider: dict, prompt: str, temperature: float, max_tokens: int) -> Tuple[Optional[str], Optional[str]]:
-        """Call a specific LLM provider with retry on rate limit."""
+        """Call a specific LLM provider."""
         headers = {"Content-Type": "application/json"}
 
         if provider["name"] == "groq":
@@ -149,7 +127,7 @@ class LLMClient:
                 "max_tokens": max_tokens,
                 "temperature": temperature,
             }
-            response = self._request_with_retry(provider["url"], headers, payload, provider["name"])
+            response = self._make_request(provider["url"], headers, payload, provider["name"])
             data = response.json()
             if data and "choices" in data and data["choices"]:
                 return data["choices"][0]["message"]["content"], None
@@ -164,7 +142,7 @@ class LLMClient:
                     "maxOutputTokens": max_tokens,
                 }
             }
-            response = self._request_with_retry(url, headers, payload, provider["name"])
+            response = self._make_request(url, headers, payload, provider["name"])
             data = response.json()
             if data and "candidates" in data and data["candidates"]:
                 first_candidate = data["candidates"][0]
@@ -184,7 +162,7 @@ class LLMClient:
                 "max_tokens": max_tokens,
                 "temperature": temperature,
             }
-            response = self._request_with_retry(provider["url"], headers, payload, provider["name"])
+            response = self._make_request(provider["url"], headers, payload, provider["name"])
             data = response.json()
             if data and "choices" in data and data["choices"]:
                 return data["choices"][0]["message"]["content"], None
