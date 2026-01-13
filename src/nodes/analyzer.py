@@ -159,7 +159,12 @@ def _extract_company_profile(raw_data: str) -> dict:
     profile = {}
 
     # Try SEC EDGAR for business address (most authoritative)
-    sec_data = multi_source.get("fundamentals_all", {}).get("sec_edgar", {}).get("data", {})
+    # Handle both structures (with and without "sources" wrapper)
+    fin_all = multi_source.get("fundamentals_all", {})
+    if "sources" in fin_all:
+        sec_data = fin_all.get("sources", {}).get("sec_edgar", {}).get("data", {})
+    else:
+        sec_data = fin_all.get("sec_edgar", {}).get("data", {})
     sec_profile = sec_data.get("company_info", {}) or sec_data.get("profile", {})
 
     if sec_profile:
@@ -177,7 +182,11 @@ def _extract_company_profile(raw_data: str) -> dict:
     yf_profile = yf_val.get("profile", {})
 
     if not yf_profile:
-        yf_fund = multi_source.get("fundamentals_all", {}).get("yahoo_finance", {}).get("data", {})
+        # Handle both structures (with and without "sources" wrapper)
+        if "sources" in fin_all:
+            yf_fund = fin_all.get("sources", {}).get("yahoo_finance", {}).get("data", {})
+        else:
+            yf_fund = fin_all.get("yahoo_finance", {}).get("data", {})
         yf_profile = yf_fund.get("profile", {})
 
     if yf_profile:
@@ -337,8 +346,13 @@ def _generate_data_report(raw_data: str, is_financial: bool = False) -> str:
 
     # ========== FINANCIALS ==========
     fin_all = multi_source.get("fundamentals_all", {})
-    sec_data = fin_all.get("sec_edgar", {}).get("data", {})
-    yf_data = fin_all.get("yahoo_finance", {}).get("data", {})
+    # Handle both structures (with and without "sources" wrapper)
+    if "sources" in fin_all:
+        sec_data = fin_all.get("sources", {}).get("sec_edgar", {}).get("data", {})
+        yf_data = fin_all.get("sources", {}).get("yahoo_finance", {}).get("data", {})
+    else:
+        sec_data = fin_all.get("sec_edgar", {}).get("data", {})
+        yf_data = fin_all.get("yahoo_finance", {}).get("data", {})
 
     if sec_data or yf_data:
         lines.append("## Financials")
@@ -606,15 +620,21 @@ def _extract_key_metrics(raw_data: str) -> dict:
     }
 
     # Extract fundamentals with temporal data
-    # Structure: metrics.fundamentals = {"sec_edgar": {"data": {...}}, "yahoo_finance": {"data": {...}}}
-    # Also check multi_source.fundamentals_all for the same structure
+    # Structure varies:
+    # - Old: {"sec_edgar": {"data": {...}}, "yahoo_finance": {"data": {...}}}
+    # - New: {"sources": {"sec_edgar": {"data": {...}}, "yahoo_finance": {"data": {...}}}}
     fin = metrics.get("fundamentals", {})
     if not fin or "error" in fin:
         fin = data.get("multi_source", {}).get("fundamentals_all", {})
     if fin and "error" not in fin:
-        # Use SEC EDGAR as primary, Yahoo Finance as fallback
-        sec_data = fin.get("sec_edgar", {}).get("data", {})
-        yf_data = fin.get("yahoo_finance", {}).get("data", {})
+        # Handle both structures (with and without "sources" wrapper)
+        if "sources" in fin:
+            sources = fin.get("sources", {})
+            sec_data = sources.get("sec_edgar", {}).get("data", {})
+            yf_data = sources.get("yahoo_finance", {}).get("data", {})
+        else:
+            sec_data = fin.get("sec_edgar", {}).get("data", {})
+            yf_data = fin.get("yahoo_finance", {}).get("data", {})
         # Merge with SEC as primary
         fin_data = {**yf_data, **sec_data}  # SEC overwrites YF where both exist
         extracted["fundamentals"] = {
