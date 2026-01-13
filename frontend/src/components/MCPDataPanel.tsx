@@ -58,26 +58,58 @@ const METRIC_LABELS: Record<string, string> = {
   vxn: 'VXN',
   beta: 'Beta',
   historical_volatility: 'Historical Volatility',
+  hist_vol: 'Historical Volatility',
   implied_volatility: 'Implied Volatility',
 
   // Macro
   gdp_growth: 'GDP Growth',
+  gdp: 'GDP',
   interest_rate: 'Interest Rate',
   cpi_inflation: 'CPI Inflation',
+  inflation: 'Inflation',
   unemployment: 'Unemployment',
+
+  // Common variations with / or shorthand
+  'p/e': 'P/E',
+  'p/b': 'P/B',
+  'p/s': 'P/S',
+  'ev/ebitda': 'EV/EBITDA',
+  'ev/revenue': 'EV/Revenue',
+  pe: 'P/E',
+  pb: 'P/B',
+  ps: 'P/S',
+  net_margin: 'Net Margin',
 }
+
+// Acronyms that should stay uppercase
+const ACRONYMS = new Set(['gdp', 'cpi', 'vix', 'vxn', 'pe', 'pb', 'ps', 'ev', 'eps', 'fcf', 'rd', 'ebitda', 'cik', 'ttm', 'fy'])
 
 // Convert snake_case metric name to human-readable label
 function formatMetricName(metric: string): string {
-  // Check if we have a predefined label
+  // Check lowercase version for case-insensitive matching
+  const lowerMetric = metric.toLowerCase()
+  if (METRIC_LABELS[lowerMetric]) {
+    return METRIC_LABELS[lowerMetric]
+  }
   if (METRIC_LABELS[metric]) {
     return METRIC_LABELS[metric]
   }
 
-  // Fallback: convert snake_case to Title Case
+  // Fallback: convert snake_case to Title Case with acronym handling
   return metric
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .split(/[_\s]+/)
+    .map(word => {
+      const lower = word.toLowerCase()
+      // Keep acronyms uppercase
+      if (ACRONYMS.has(lower)) {
+        return lower.toUpperCase()
+      }
+      // Handle P/B, P/E style (already has /)
+      if (word.includes('/')) {
+        return word.toUpperCase()
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    })
     .join(' ')
 }
 
@@ -552,7 +584,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
             <table className="text-xs">
               <thead className="bg-muted/30">
                 <tr>
-                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">S/N</th>
+                  <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Ref</th>
                   <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Metric</th>
                   <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">Value</th>
                   <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Data Type</th>
@@ -564,7 +596,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
               <tbody className="divide-y divide-border">
                 {quantitativeRows.map((row, idx) => (
                   <tr key={idx} className="hover:bg-muted/20">
-                    <td className="px-3 py-1.5 text-muted-foreground">{idx + 1}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">M{String(idx + 1).padStart(2, '0')}</td>
                     <td className="px-3 py-1.5">{formatMetricName(row.metric)}</td>
                     <td className="px-3 py-1.5 text-right font-medium">{row.value}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{row.dataType}</td>

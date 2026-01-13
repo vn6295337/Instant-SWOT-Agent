@@ -149,29 +149,56 @@ def _is_financial_institution(sector: str, industry: str, ticker: str) -> bool:
 
 
 def _extract_company_profile(raw_data: str) -> dict:
-    """Extract sector/industry from Yahoo Finance data if available."""
+    """Extract company profile details from SEC EDGAR and Yahoo Finance data."""
     try:
         data = json.loads(raw_data)
     except json.JSONDecodeError:
         return {}
 
     multi_source = data.get("multi_source", {})
+    profile = {}
 
-    # Try valuation Yahoo Finance data first
+    # Try SEC EDGAR for business address (most authoritative)
+    sec_data = multi_source.get("fundamentals_all", {}).get("sec_edgar", {}).get("data", {})
+    sec_profile = sec_data.get("company_info", {}) or sec_data.get("profile", {})
+
+    if sec_profile:
+        # SEC EDGAR company info
+        city = sec_profile.get("city", "")
+        state = sec_profile.get("state", sec_profile.get("stateOrCountry", ""))
+        if city and state:
+            profile["business_address"] = f"{city}, {state}"
+        profile["cik"] = sec_profile.get("cik", "")
+        profile["sic"] = sec_profile.get("sic", "")
+        profile["sic_description"] = sec_profile.get("sicDescription", "")
+
+    # Try Yahoo Finance for sector/industry and other details
     yf_val = multi_source.get("valuation_all", {}).get("yahoo_finance", {}).get("data", {})
-    profile = yf_val.get("profile", {})
+    yf_profile = yf_val.get("profile", {})
 
-    if profile.get("sector"):
-        return {"sector": profile.get("sector"), "industry": profile.get("industry")}
+    if not yf_profile:
+        yf_fund = multi_source.get("fundamentals_all", {}).get("yahoo_finance", {}).get("data", {})
+        yf_profile = yf_fund.get("profile", {})
 
-    # Fallback to fundamentals Yahoo Finance
-    yf_fund = multi_source.get("fundamentals_all", {}).get("yahoo_finance", {}).get("data", {})
-    fund_profile = yf_fund.get("profile", {})
+    if yf_profile:
+        profile["sector"] = yf_profile.get("sector", "")
+        profile["industry"] = yf_profile.get("industry", "")
+        profile["employees"] = yf_profile.get("fullTimeEmployees", "")
+        profile["website"] = yf_profile.get("website", "")
+        # Yahoo Finance may also have address
+        if not profile.get("business_address"):
+            city = yf_profile.get("city", "")
+            state = yf_profile.get("state", "")
+            country = yf_profile.get("country", "")
+            if city:
+                addr_parts = [city]
+                if state:
+                    addr_parts.append(state)
+                if country and country != "United States":
+                    addr_parts.append(country)
+                profile["business_address"] = ", ".join(addr_parts)
 
-    return {
-        "sector": fund_profile.get("sector", ""),
-        "industry": fund_profile.get("industry", "")
-    }
+    return profile
 
 
 def _add_activity_log(workflow_id, progress_store, step, message):
@@ -307,6 +334,32 @@ def _generate_data_report(raw_data: str, is_financial: bool = False) -> str:
 
     lines.append(f"# Data Report: {company} ({ticker})")
     lines.append("")
+
+    # ========== COMPANY DETAILS ==========
+    company_profile = _extract_company_profile(raw_data)
+    if company_profile:
+        lines.append("## Company Details")
+        lines.append("")
+        lines.append("| Field | Value |")
+        lines.append("|-------|-------|")
+        if company_profile.get("sector"):
+            lines.append(f"| Sector | {company_profile['sector']} |")
+        if company_profile.get("industry"):
+            lines.append(f"| Industry | {company_profile['industry']} |")
+        if company_profile.get("business_address"):
+            lines.append(f"| Headquarters | {company_profile['business_address']} |")
+        if company_profile.get("employees"):
+            employees = company_profile['employees']
+            if isinstance(employees, int):
+                employees = f"{employees:,}"
+            lines.append(f"| Employees | {employees} |")
+        if company_profile.get("website"):
+            lines.append(f"| Website | {company_profile['website']} |")
+        if company_profile.get("cik"):
+            lines.append(f"| CIK | {company_profile['cik']} |")
+        if company_profile.get("sic_description"):
+            lines.append(f"| SIC | {company_profile['sic_description']} |")
+        lines.append("")
 
     # ========== FINANCIALS ==========
     fin_all = multi_source.get("fundamentals_all", {})
@@ -1099,14 +1152,33 @@ def _format_reference_log(metric_lookup: dict) -> str:
     return ", ".join(parts)
 
 
+def _format_metric_key(key: str) -> str:
+    """Format metric key to human-readable name (e.g., pb_ratio -> P/B Ratio)."""
+    METRIC_NAMES = {
+        "revenue": "Revenue", "net_income": "Net Income", "net_margin": "Net Margin",
+        "net_margin_pct": "Net Margin", "gross_margin": "Gross Margin", "operating_margin": "Operating Margin",
+        "free_cash_flow": "Free Cash Flow", "operating_cash_flow": "Operating Cash Flow",
+        "total_assets": "Total Assets", "total_liabilities": "Total Liabilities",
+        "stockholders_equity": "Stockholders' Equity", "debt_to_equity": "Debt/Equity",
+        "eps": "EPS", "market_cap": "Market Cap", "enterprise_value": "Enterprise Value",
+        "trailing_pe": "P/E (Trailing)", "forward_pe": "P/E (Forward)",
+        "pb_ratio": "P/B Ratio", "ps_ratio": "P/S Ratio", "trailing_peg": "PEG Ratio",
+        "price_to_fcf": "Price/FCF", "ev_ebitda": "EV/EBITDA", "ev_revenue": "EV/Revenue",
+        "vix": "VIX", "beta": "Beta", "historical_volatility": "Historical Volatility",
+        "gdp_growth": "GDP Growth", "interest_rate": "Interest Rate",
+        "cpi_inflation": "Inflation", "unemployment": "Unemployment",
+    }
+    return METRIC_NAMES.get(key, key.replace("_", " ").title())
+
+
 def _generate_data_quality_notes(metric_reference: dict) -> dict:
     """
     Generate deterministic data quality assessment from metric reference.
 
     Returns:
         {
-            "high_confidence": ["revenue", "net_margin", ...],
-            "gaps_or_stale": ["eps (stale: 2024-06-30)", "debt_to_equity (missing)"],
+            "high_confidence": ["Revenue", "Net Margin", ...],
+            "gaps_or_stale": ["EPS (stale: 2024-06-30)", "Debt/Equity (missing)"],
         }
     """
     from datetime import datetime, timedelta
@@ -1118,22 +1190,23 @@ def _generate_data_quality_notes(metric_reference: dict) -> dict:
 
     for ref_id, entry in metric_reference.items():
         key = entry.get("key", "unknown")
+        display_name = _format_metric_key(key)
         raw_value = entry.get("raw_value")
         as_of_date = entry.get("as_of_date")
 
         if raw_value is None:
-            gaps_or_stale.append(f"{key} (missing)")
+            gaps_or_stale.append(f"{display_name} (missing)")
         elif as_of_date:
             try:
                 date = datetime.strptime(as_of_date, "%Y-%m-%d")
                 if today - date > threshold:
-                    gaps_or_stale.append(f"{key} (stale: {as_of_date})")
+                    gaps_or_stale.append(f"{display_name} (stale: {as_of_date})")
                 else:
-                    high_confidence.append(key)
+                    high_confidence.append(display_name)
             except ValueError:
-                high_confidence.append(key)
+                high_confidence.append(display_name)
         else:
-            high_confidence.append(key)
+            high_confidence.append(display_name)
 
     return {
         "high_confidence": high_confidence,

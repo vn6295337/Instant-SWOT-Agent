@@ -495,11 +495,11 @@ def critic_node(state, workflow_id=None, progress_store=None):
 
     # Log status and score
     if status == "APPROVED":
-        score_msg = f"APPROVED - Score: {weighted_score:.1f}/10"
+        score_msg = f"Score: {weighted_score:.1f}/10"
     elif status == "ESCALATE":
-        score_msg = f"ESCALATE - Score: {weighted_score:.1f}/10 (max iterations)"
+        score_msg = f"Score: {weighted_score:.1f}/10"
     else:
-        score_msg = f"REJECTED - Score: {weighted_score:.1f}/10 - needs revision"
+        score_msg = f"Score: {weighted_score:.1f}/10"
     _add_activity_log(workflow_id, progress_store, "critic", score_msg)
 
     # Build critique message
