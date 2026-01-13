@@ -7,6 +7,7 @@ class AgentState(TypedDict):
     raw_data: Optional[str]
     draft_report: Optional[str]
     critique: Optional[str]
+    critique_details: Optional[dict]  # Structured critique for revision loop
     revision_count: int
     score: int
     messages: List[str]
@@ -25,3 +26,5 @@ class AgentState(TypedDict):
     # Metric reference for hallucination prevention (Layer 1)
     metric_reference: Optional[dict]  # {M01: {key, raw_value, formatted, as_of_date}, ...}
     metric_reference_hash: Optional[str]  # SHA256 hash for integrity verification
+    # Revision tracking
+    analyzer_revision_skipped: Optional[bool]  # True if revision was skipped due to LLM failure

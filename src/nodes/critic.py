@@ -560,6 +560,9 @@ def critic_node(state, workflow_id=None, progress_store=None):
         "actionable_feedback": result.get("actionable_feedback", []),
     }
 
+    # Debug: Log what's being set in critique_details
+    print(f"[DEBUG] Critic: Setting critique_details status={status}, score={weighted_score:.1f}")
+
     # Update progress
     if workflow_id and progress_store:
         progress_store[workflow_id].update({

@@ -1489,6 +1489,9 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
     critique_details = state.get("critique_details", {})
     is_revision = bool(critique_details) and critique_details.get("status") == "REJECTED"
 
+    # Debug: Log critique details presence
+    print(f"[DEBUG] Analyzer: critique_details={bool(critique_details)}, status={critique_details.get('status')}, is_revision={is_revision}")
+
     if is_revision and critique_details:
         # REVISION MODE: Use enhanced revision prompt with Critic feedback
         current_revision = state.get("revision_count", 0) + 1
