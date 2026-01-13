@@ -511,14 +511,48 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
   const companyProfile = React.useMemo(() => {
     if (!rawData) return null
 
-    // Try to get profile from valuation or company_info
-    const profile = rawData.metrics?.valuation?.profile || rawData.company_info || {}
+    // Try multiple sources for profile data
+    const multiSource = rawData.multi_source as Record<string, unknown> | undefined
+    const valAll = multiSource?.valuation_all as Record<string, unknown> | undefined
+    const fundsAll = multiSource?.fundamentals_all as Record<string, unknown> | undefined
+
+    // Yahoo Finance profile (most complete)
+    const yfValData = valAll?.yahoo_finance as Record<string, unknown> | undefined
+    const yfProfile = yfValData?.data as Record<string, unknown> | undefined
+    const yfProfileNested = yfProfile?.profile as Record<string, unknown> | undefined
+
+    // SEC EDGAR company info
+    const secData = fundsAll?.sec_edgar as Record<string, unknown> | undefined
+    const secInfo = secData?.data as Record<string, unknown> | undefined
+    const secCompanyInfo = secInfo?.company_info as Record<string, unknown> | undefined
+
+    // Legacy fallback
+    const legacyProfile = rawData.metrics?.valuation?.profile || rawData.company_info || {}
+
+    // Merge sources (Yahoo Finance primary, SEC secondary, legacy fallback)
+    const profile = { ...legacyProfile, ...secCompanyInfo, ...yfProfileNested, ...yfProfile }
+
+    // Build HQ location from available fields
+    let hqLocation = null
+    const city = profile.city as string | undefined
+    const state = profile.state as string | undefined
+    const stateOrCountry = profile.stateOrCountry as string | undefined
+    const country = profile.country as string | undefined
+
+    if (city && (state || stateOrCountry)) {
+      const stateVal = state || stateOrCountry
+      hqLocation = country && country !== 'United States' && country !== 'US'
+        ? `${city}, ${stateVal}, ${country}`
+        : `${city}, ${stateVal}`
+    }
+
     return {
-      sector: profile.sector || profile.industry || null,
-      hqLocation: profile.city && profile.state
-        ? `${profile.city}, ${profile.state}${profile.country ? `, ${profile.country}` : ''}`
-        : profile.address || profile.location || null,
-      employees: profile.fullTimeEmployees || profile.employees || null,
+      sector: profile.sector as string | null || null,
+      industry: profile.industry as string | null || null,
+      hqLocation,
+      employees: profile.fullTimeEmployees as number | null || profile.employees as number | null || null,
+      website: profile.website as string | null || null,
+      sicDescription: profile.sicDescription as string | null || null,
     }
   }, [rawData])
 
@@ -531,7 +565,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
 
   return (
     <div className="space-y-4">
-      {/* Company Details */}
+      {/* Company Profile */}
       {(companyName || ticker) && (
         <div className="bg-card rounded-lg border border-border overflow-hidden">
           <div className="px-3 py-2 bg-muted/50 border-b border-border">
@@ -556,6 +590,9 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
               <div className="flex items-center gap-2">
                 <Briefcase className="h-4 w-4 text-muted-foreground" />
                 <span>{companyProfile.sector}</span>
+                {companyProfile?.industry && companyProfile.industry !== companyProfile.sector && (
+                  <span className="text-muted-foreground">/ {companyProfile.industry}</span>
+                )}
               </div>
             )}
             {companyProfile?.hqLocation && (
@@ -568,6 +605,24 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">Employees:</span>
                 <span>{Number(companyProfile.employees).toLocaleString()}</span>
+              </div>
+            )}
+            {companyProfile?.website && (
+              <div className="flex items-center gap-2">
+                <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                <a
+                  href={companyProfile.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 hover:underline"
+                >
+                  {companyProfile.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                </a>
+              </div>
+            )}
+            {companyProfile?.sicDescription && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span>SIC: {companyProfile.sicDescription}</span>
               </div>
             )}
           </div>
