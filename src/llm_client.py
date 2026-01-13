@@ -50,7 +50,7 @@ class LLMClient:
             self.providers.append({
                 "name": "openrouter",
                 "key": openrouter_key,
-                "model": os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-120b:free"),
+                "model": os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat-v3-0324:free"),
                 "url": "https://openrouter.ai/api/v1/chat/completions"
             })
 
