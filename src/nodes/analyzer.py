@@ -1348,17 +1348,29 @@ Weighted Score: {critique_details.get('weighted_score', 0):.1f} / 10
 
 ### OUTPUT INSTRUCTIONS
 
-Produce a complete, revised SWOT analysis using TABLE format:
+Produce a complete, revised SWOT analysis with this exact structure (3-5 points per section):
 
 ## Strengths
-| Ref | Metric | Insight |
-|-----|--------|---------|
-| M## | Metric: Value | Strategic insight in one sentence |
+- [M01] Revenue: $394.3B - Strong market position with substantial scale
+- [M02] Net Margin: 24.3% - High profitability indicates pricing power
 
-(Same table format for Weaknesses, Opportunities, Threats)
+## Weaknesses
+- [M04] Debt/Equity: 1.87 - Elevated leverage increases financial risk
+
+## Opportunities
+- [M12] GDP Growth: 4.3% - Favorable macro environment for expansion
+
+## Threats
+- [M13] Interest Rate: 3.72% - Higher borrowing costs may impact margins
+
+CRITICAL REQUIREMENTS:
+1. Each point MUST start with metric reference in brackets: [M##]
+2. Format: [M##] Metric: Value - Strategic insight
+3. Use EXACT values from the METRIC REFERENCE TABLE - do NOT round
+4. Keep insights concise (one sentence)
+5. Include 3-5 points per section
 
 Do not:
-- Use bullet points or **bold** labels - use tables only
 - Include any preamble about revisions
 - Reference the Critic's feedback in your output
 
@@ -1404,42 +1416,27 @@ def _build_analyzer_prompt(company: str, ticker: str, formatted_data: str,
 
 === OUTPUT FORMAT ===
 
-Produce a SWOT analysis using TABLES with this exact structure:
+Produce a SWOT analysis with this exact structure (3-5 points per section):
 
 ## Strengths
-| Ref | Metric | Insight |
-|-----|--------|---------|
-| M01 | Revenue: $394.3B | Strong market position with substantial scale |
-| M02 | Net Margin: 24.3% | High profitability indicates pricing power |
-
-(Include 3-5 rows per section)
+- [M01] Revenue: $394.3B - Strong market position with substantial scale
+- [M02] Net Margin: 24.3% - High profitability indicates pricing power
 
 ## Weaknesses
-| Ref | Metric | Insight |
-|-----|--------|---------|
-| M04 | Debt/Equity: 1.87 | Elevated leverage increases financial risk |
+- [M04] Debt/Equity: 1.87 - Elevated leverage increases financial risk
 
 ## Opportunities
-| Ref | Metric | Insight |
-|-----|--------|---------|
-| M12 | GDP Growth: 4.3% | Favorable macro environment for expansion |
+- [M12] GDP Growth: 4.3% - Favorable macro environment for expansion
 
 ## Threats
-| Ref | Metric | Insight |
-|-----|--------|---------|
-| M13 | Interest Rate: 3.72% | Higher borrowing costs may impact margins |
-
-## Data Quality Notes
-- Metrics Used: [List key metrics analyzed]
-- Data Gaps: [Any unavailable metrics]
-- Confidence: [High/Medium/Low]
+- [M13] Interest Rate: 3.72% - Higher borrowing costs may impact margins
 
 CRITICAL REQUIREMENTS:
-1. Use TABLE format as shown above - NOT bullet points
-2. Every row MUST cite a metric reference [M##] in the Ref column
-3. Metric column: Name and value (e.g., "Revenue: $394.3B")
-4. Insight column: One concise sentence explaining strategic implication
-5. Use EXACT values from the METRIC REFERENCE TABLE - do NOT round"""
+1. Each point MUST start with metric reference in brackets: [M##]
+2. Format: [M##] Metric: Value - Strategic insight
+3. Use EXACT values from the METRIC REFERENCE TABLE - do NOT round
+4. Keep insights concise (one sentence)
+5. Include 3-5 points per section"""
 
     return prompt, metric_lookup, ref_hash
 
