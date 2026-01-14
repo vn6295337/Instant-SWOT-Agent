@@ -644,14 +644,16 @@ def _extract_key_metrics(raw_data: str) -> dict:
     if not val or "error" in val:
         val = data.get("multi_source", {}).get("valuation_all", {})
     if val and "error" not in val:
-        yf_source = val.get("yahoo_finance", {})
-        yf_val = yf_source.get("data", yf_source) if "data" in yf_source else yf_source
+        # New MCP structure: {yahoo_finance: {...}, alpha_vantage: {...}}
+        # Check both sources - yahoo_finance is primary, alpha_vantage is fallback
+        yf_val = val.get("yahoo_finance", {})
+        av_val = val.get("alpha_vantage", {})
         extracted["valuation"] = {
-            "pe_trailing": _extract_valuation_metric(yf_val.get("trailing_pe", {})),
-            "pe_forward": _extract_valuation_metric(yf_val.get("forward_pe", {})),
-            "pb_ratio": _extract_valuation_metric(yf_val.get("price_to_book", {})),
-            "ps_ratio": _extract_valuation_metric(yf_val.get("price_to_sales", {})),
-            "ev_ebitda": _extract_valuation_metric(yf_val.get("ev_ebitda", {})),
+            "pe_trailing": _extract_valuation_metric(yf_val.get("trailing_pe") or av_val.get("trailing_pe", {})),
+            "pe_forward": _extract_valuation_metric(yf_val.get("forward_pe") or av_val.get("forward_pe", {})),
+            "pb_ratio": _extract_valuation_metric(yf_val.get("pb_ratio") or av_val.get("pb_ratio", {})),
+            "ps_ratio": _extract_valuation_metric(yf_val.get("ps_ratio") or av_val.get("ps_ratio", {})),
+            "ev_ebitda": _extract_valuation_metric(av_val.get("ev_ebitda") or yf_val.get("ev_ebitda", {})),
             "valuation_signal": val.get("overall_signal"),
         }
 
@@ -692,9 +694,9 @@ def _extract_key_metrics(raw_data: str) -> dict:
 
         extracted["macro"] = {
             "gdp_growth": _extract_valuation_metric(bea.get("gdp_growth", {})),
-            "interest_rate": _extract_valuation_metric(fred.get("fed_funds_rate", {})),
-            "inflation": _extract_valuation_metric(bls.get("cpi_yoy", {})),
-            "unemployment": _extract_valuation_metric(bls.get("unemployment_rate", {})),
+            "interest_rate": _extract_valuation_metric(fred.get("interest_rate", {})),
+            "inflation": _extract_valuation_metric(bls.get("cpi_inflation", {})),
+            "unemployment": _extract_valuation_metric(bls.get("unemployment", {})),
         }
 
     # Extract news with VADER sentiment
