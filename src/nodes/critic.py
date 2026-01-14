@@ -372,6 +372,10 @@ def critic_node(state, workflow_id=None, progress_store=None):
         if _verify_reference_integrity(metric_ref, ref_hash):
             mismatches = validate_numeric_accuracy(report, metric_ref)
             if mismatches:
+                # Log each mismatch for debugging
+                for mismatch in mismatches:
+                    _add_activity_log(workflow_id, progress_store, "critic",
+                                      f"MISMATCH: {mismatch}")
                 _add_activity_log(workflow_id, progress_store, "critic",
                                   f"Numeric validation: {len(mismatches)} mismatch(es) detected")
 
