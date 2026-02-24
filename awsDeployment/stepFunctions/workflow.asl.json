@@ -1,0 +1,70 @@
+{
+  "Comment": "SWOT Agent Multi-Agent Workflow with Self-Correction Loop",
+  "StartAt": "Researcher",
+  "States": {
+    "Researcher": {
+      "Type": "Task",
+      "Comment": "Gather data from MCP servers (financials, news, sentiment)",
+      "Resource": "arn:aws:lambda:us-east-1:691210491730:function:swot-agent-researcher",
+      "Next": "Analyzer"
+    },
+    "Analyzer": {
+      "Type": "Task",
+      "Comment": "Generate SWOT analysis from research data",
+      "Resource": "arn:aws:lambda:us-east-1:691210491730:function:swot-agent-analyzer",
+      "Next": "Critic"
+    },
+    "Critic": {
+      "Type": "Task",
+      "Comment": "Evaluate SWOT quality and assign score",
+      "Resource": "arn:aws:lambda:us-east-1:691210491730:function:swot-agent-critic",
+      "Next": "CheckScore"
+    },
+    "CheckScore": {
+      "Type": "Choice",
+      "Comment": "Exit if score >= 7 OR revision_count >= 3",
+      "Choices": [
+        {
+          "Or": [
+            { "Variable": "$.score", "NumericGreaterThanEquals": 7 },
+            { "Variable": "$.revision_count", "NumericGreaterThanEquals": 3 }
+          ],
+          "Next": "Complete"
+        }
+      ],
+      "Default": "IncrementRevision"
+    },
+    "IncrementRevision": {
+      "Type": "Pass",
+      "Comment": "Increment revision counter and loop back - pass entire input plus increment count",
+      "InputPath": "$",
+      "ResultPath": "$.revision_increment",
+      "Parameters": {
+        "new_count.$": "States.MathAdd($.revision_count, 1)"
+      },
+      "Next": "SetRevisionCount"
+    },
+    "SetRevisionCount": {
+      "Type": "Pass",
+      "Comment": "Apply the incremented revision count",
+      "Parameters": {
+        "workflow_id.$": "$.workflow_id",
+        "company.$": "$.company",
+        "ticker.$": "$.ticker",
+        "strategy_focus.$": "$.strategy_focus",
+        "revision_count.$": "$.revision_increment.new_count",
+        "raw_data.$": "$.raw_data",
+        "critique.$": "$.critique",
+        "draft_report.$": "$.draft_report",
+        "score.$": "$.score"
+      },
+      "Next": "Analyzer"
+    },
+    "Complete": {
+      "Type": "Task",
+      "Comment": "Save final result to DynamoDB",
+      "Resource": "arn:aws:lambda:us-east-1:691210491730:function:swot-agent-complete",
+      "End": true
+    }
+  }
+}
