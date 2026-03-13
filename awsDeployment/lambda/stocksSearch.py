@@ -24,7 +24,7 @@ def lambda_handler(event, context):
             return {
                 'statusCode': 200,
                 'headers': cors_headers(),
-                'body': json.dumps([])
+                'body': json.dumps({'query': '', 'results': []})
             }
 
         # Try to use the existing stock listings module
@@ -32,8 +32,13 @@ def lambda_handler(event, context):
             from src.stock_listings import search_stocks, get_us_stock_listings
             stocks = get_us_stock_listings()
             results = search_stocks(query, stocks, max_results=20)
-            # Convert to expected format (original uses 'symbol', frontend expects 'ticker')
-            formatted = [{'ticker': r['symbol'], 'name': r['name']} for r in results]
+            # Convert to frontend expected format
+            formatted = [{
+                'symbol': r['symbol'],
+                'name': r['name'],
+                'exchange': r.get('exchange', 'NASDAQ'),
+                'match_type': r.get('match_type', 'partial')
+            } for r in results]
         except Exception as e:
             print(f"Using fallback search due to: {e}")
             # Fallback to basic hardcoded list for common stocks
@@ -42,7 +47,7 @@ def lambda_handler(event, context):
         return {
             'statusCode': 200,
             'headers': cors_headers(),
-            'body': json.dumps(formatted)
+            'body': json.dumps({'query': query, 'results': formatted})
         }
 
     except Exception as e:
@@ -57,45 +62,46 @@ def lambda_handler(event, context):
 def search_fallback(query: str) -> list:
     """Fallback search with popular stocks."""
     POPULAR_STOCKS = [
-        {'ticker': 'AAPL', 'name': 'Apple Inc.'},
-        {'ticker': 'MSFT', 'name': 'Microsoft Corporation'},
-        {'ticker': 'GOOGL', 'name': 'Alphabet Inc.'},
-        {'ticker': 'AMZN', 'name': 'Amazon.com Inc.'},
-        {'ticker': 'META', 'name': 'Meta Platforms Inc.'},
-        {'ticker': 'TSLA', 'name': 'Tesla Inc.'},
-        {'ticker': 'NVDA', 'name': 'NVIDIA Corporation'},
-        {'ticker': 'JPM', 'name': 'JPMorgan Chase & Co.'},
-        {'ticker': 'V', 'name': 'Visa Inc.'},
-        {'ticker': 'JNJ', 'name': 'Johnson & Johnson'},
-        {'ticker': 'WMT', 'name': 'Walmart Inc.'},
-        {'ticker': 'PG', 'name': 'Procter & Gamble Co.'},
-        {'ticker': 'MA', 'name': 'Mastercard Inc.'},
-        {'ticker': 'UNH', 'name': 'UnitedHealth Group Inc.'},
-        {'ticker': 'HD', 'name': 'Home Depot Inc.'},
-        {'ticker': 'DIS', 'name': 'Walt Disney Co.'},
-        {'ticker': 'BAC', 'name': 'Bank of America Corp.'},
-        {'ticker': 'NFLX', 'name': 'Netflix Inc.'},
-        {'ticker': 'ADBE', 'name': 'Adobe Inc.'},
-        {'ticker': 'CRM', 'name': 'Salesforce Inc.'},
-        {'ticker': 'INTC', 'name': 'Intel Corporation'},
-        {'ticker': 'AMD', 'name': 'Advanced Micro Devices Inc.'},
-        {'ticker': 'CSCO', 'name': 'Cisco Systems Inc.'},
-        {'ticker': 'ORCL', 'name': 'Oracle Corporation'},
-        {'ticker': 'IBM', 'name': 'IBM Corporation'},
-        {'ticker': 'UBER', 'name': 'Uber Technologies Inc.'},
-        {'ticker': 'ABNB', 'name': 'Airbnb Inc.'},
-        {'ticker': 'SQ', 'name': 'Block Inc.'},
-        {'ticker': 'SHOP', 'name': 'Shopify Inc.'},
-        {'ticker': 'SPOT', 'name': 'Spotify Technology S.A.'},
+        {'symbol': 'AAPL', 'name': 'Apple Inc.', 'exchange': 'NASDAQ'},
+        {'symbol': 'MSFT', 'name': 'Microsoft Corporation', 'exchange': 'NASDAQ'},
+        {'symbol': 'GOOGL', 'name': 'Alphabet Inc.', 'exchange': 'NASDAQ'},
+        {'symbol': 'AMZN', 'name': 'Amazon.com Inc.', 'exchange': 'NASDAQ'},
+        {'symbol': 'META', 'name': 'Meta Platforms Inc.', 'exchange': 'NASDAQ'},
+        {'symbol': 'TSLA', 'name': 'Tesla Inc.', 'exchange': 'NASDAQ'},
+        {'symbol': 'NVDA', 'name': 'NVIDIA Corporation', 'exchange': 'NASDAQ'},
+        {'symbol': 'JPM', 'name': 'JPMorgan Chase & Co.', 'exchange': 'NYSE'},
+        {'symbol': 'V', 'name': 'Visa Inc.', 'exchange': 'NYSE'},
+        {'symbol': 'JNJ', 'name': 'Johnson & Johnson', 'exchange': 'NYSE'},
+        {'symbol': 'WMT', 'name': 'Walmart Inc.', 'exchange': 'NYSE'},
+        {'symbol': 'PG', 'name': 'Procter & Gamble Co.', 'exchange': 'NYSE'},
+        {'symbol': 'MA', 'name': 'Mastercard Inc.', 'exchange': 'NYSE'},
+        {'symbol': 'UNH', 'name': 'UnitedHealth Group Inc.', 'exchange': 'NYSE'},
+        {'symbol': 'HD', 'name': 'Home Depot Inc.', 'exchange': 'NYSE'},
+        {'symbol': 'DIS', 'name': 'Walt Disney Co.', 'exchange': 'NYSE'},
+        {'symbol': 'BAC', 'name': 'Bank of America Corp.', 'exchange': 'NYSE'},
+        {'symbol': 'NFLX', 'name': 'Netflix Inc.', 'exchange': 'NASDAQ'},
+        {'symbol': 'ADBE', 'name': 'Adobe Inc.', 'exchange': 'NASDAQ'},
+        {'symbol': 'CRM', 'name': 'Salesforce Inc.', 'exchange': 'NYSE'},
+        {'symbol': 'INTC', 'name': 'Intel Corporation', 'exchange': 'NASDAQ'},
+        {'symbol': 'AMD', 'name': 'Advanced Micro Devices Inc.', 'exchange': 'NASDAQ'},
+        {'symbol': 'CSCO', 'name': 'Cisco Systems Inc.', 'exchange': 'NASDAQ'},
+        {'symbol': 'ORCL', 'name': 'Oracle Corporation', 'exchange': 'NYSE'},
+        {'symbol': 'IBM', 'name': 'IBM Corporation', 'exchange': 'NYSE'},
+        {'symbol': 'UBER', 'name': 'Uber Technologies Inc.', 'exchange': 'NYSE'},
+        {'symbol': 'ABNB', 'name': 'Airbnb Inc.', 'exchange': 'NASDAQ'},
+        {'symbol': 'SQ', 'name': 'Block Inc.', 'exchange': 'NYSE'},
+        {'symbol': 'SHOP', 'name': 'Shopify Inc.', 'exchange': 'NYSE'},
+        {'symbol': 'SPOT', 'name': 'Spotify Technology S.A.', 'exchange': 'NYSE'},
     ]
 
     query_lower = query.lower()
     results = []
 
     for stock in POPULAR_STOCKS:
-        if (query_lower in stock['ticker'].lower() or
+        if (query_lower in stock['symbol'].lower() or
             query_lower in stock['name'].lower()):
-            results.append(stock)
+            match_type = 'exact' if query_lower == stock['symbol'].lower() else 'partial'
+            results.append({**stock, 'match_type': match_type})
             if len(results) >= 10:
                 break
 

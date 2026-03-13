@@ -220,9 +220,64 @@ Deploy the SWOT Agent to AWS using serverless architecture.
   > **Notes:** Invalidation ID: IASEF1N6ACFNTW7M8S47HUVYJI
   > **Command:** `aws cloudfront create-invalidation --distribution-id E1CVZ9XDKUA980 --paths "/*"`
 
-- [ ] 38. Test end-to-end flow from browser
+- [x] 38. Test end-to-end flow from browser
   > **URL:** https://d15w0kikwn6a78.cloudfront.net
   > **Test:** search stock → start analysis → poll status → view result
+  > **Verified:** Apple (AAPL) workflow completed with 4 Analyzer runs, 4 Critic runs, 3 revisions ✅
+
+---
+
+## Phase 7b: Agentic Workflow Bug Fixes (Critical)
+
+The initial Lambda wrappers did not properly replicate the LangGraph agentic workflow. The following fixes were required:
+
+- [x] 38a. Fix Lambda handler paths
+  > **Issue:** Handlers configured as `lambda.researcher.lambda_handler` but files at package root.
+  > **Fix:** Changed to `researcher.lambda_handler`, `analyzer.lambda_handler`, etc.
+  > **Error:** `Runtime.ImportModuleError: No module named 'lambda'`
+
+- [x] 38b. Fix import paths in complete.py and result.py
+  > **Issue:** `from lambda.swot_parser import parse_swot_text` invalid.
+  > **Fix:** Changed to `from swot_parser import parse_swot_text`.
+  > **Error:** `Syntax error: invalid syntax (complete.py, line 14)`
+
+- [x] 38c. Add missing dependency: vaderSentiment
+  > **Issue:** Critic node imports vaderSentiment for sentiment analysis.
+  > **Fix:** Added `pip install vaderSentiment` to Lambda package.
+  > **Error:** `No module named 'vaderSentiment'`
+
+- [x] 38d. **CRITICAL: Fix critique_details flow for revision mode**
+  > **Issue:** Original LangGraph passes `critique_details` dict between Critic → Analyzer.
+  > Analyzer uses `critique_details.status == "REJECTED"` to detect revision mode.
+  > Lambda wrappers were NOT passing this field, causing `is_revision` to always be False.
+  > **Root cause analysis:**
+  > | Component | Before | After |
+  > |-----------|--------|-------|
+  > | Critic Lambda | Returned only `score`, `critique` | Now returns `critique_details`, `metric_reference` |
+  > | Analyzer Lambda | State missing `critique_details` | Now includes `critique_details` for revision mode |
+  > | Step Functions SetRevisionCount | Dropped `critique_details` | Now preserves `critique_details`, `metric_reference` |
+  > **Impact:** Without this fix, Analyzer regenerated SWOT from scratch each revision instead of improving based on feedback.
+
+- [x] 38e. Fix scoring threshold mismatch
+  > **Issue:** Step Functions used `score >= 7` but original `should_continue()` uses `score >= 6`.
+  > **Fix:** Changed CheckScore choice to `NumericGreaterThanEquals: 6`.
+  > **File:** `workflow.asl.json`
+
+- [x] 38f. Add metric_reference pass-through
+  > **Issue:** Critic needs `metric_reference` and `metric_reference_hash` from Analyzer for numeric validation.
+  > **Fix:**
+  > - Analyzer Lambda returns these fields
+  > - Critic Lambda passes them through from event
+  > - Step Functions SetRevisionCount preserves them
+
+- [x] 38g. Verify revision loop works correctly
+  > **Test:** Apple (AAPL) analysis
+  > **Results:**
+  > - Researcher: 1x, Analyzer: 4x, Critic: 4x, Complete: 1x
+  > - critique_details passed correctly on revisions 1, 2, 3
+  > - Score improved: 4.95 → 5.95 → 5.95
+  > - Exited after 3 revisions (max reached)
+  > **Conclusion:** Agentic self-correction loop working as designed ✅
 
 ---
 
@@ -310,14 +365,15 @@ Deploy the SWOT Agent to AWS using serverless architecture.
 | Resource | Name/ID | Status |
 |----------|---------|--------|
 | S3 (frontend) | `swot-agent-frontend-691210491730` | ✅ Live |
+| S3 (deployment) | `swot-agent-deployment-691210491730` | ✅ Lambda packages |
 | S3 (terraform state) | `swot-agent-tfstate-691210491730` | ✅ Created |
 | ECR | `swot-agent` | ✅ Created (unused) |
 | Secrets Manager | `swot-agent-api-keys` | ✅ 10 keys stored |
 | CloudFront | `d15w0kikwn6a78.cloudfront.net` (E1CVZ9XDKUA980) | ✅ Deployed |
 | Lambda (API) | `swot-agent-{analyze,status,result,stocks-search}` | ✅ Created |
-| Lambda (Agents) | `swot-agent-{researcher,analyzer,critic,complete}` | ✅ Created |
+| Lambda (Agents) | `swot-agent-{researcher,analyzer,critic,complete}` | ✅ Created + Fixed |
 | API Gateway | `irue5atrlj` | ✅ Deployed (prod) |
-| Step Functions | `swot-agent-workflow` | ✅ Created |
+| Step Functions | `swot-agent-workflow` | ✅ Created + Fixed |
 | DynamoDB | `swot-workflows`, `swot-cache` | ✅ Created |
 | IAM Roles | `swot-agent-lambda-role`, `swot-agent-stepfunctions-role` | ✅ Created |
 | CloudWatch | Dashboard + 2 alarms | ✅ Configured |
@@ -336,6 +392,25 @@ Deploy the SWOT Agent to AWS using serverless architecture.
 | State | Replaced in-memory with DynamoDB | Persistence across Lambda invocations |
 | Secrets | Secrets Manager (not env vars) | Secure, rotatable, auditable |
 | Frontend hosting | S3 + CloudFront | Standard pattern, HTTPS, CDN caching |
+| Lambda wrappers | Reuse src/ node functions | Code reuse, but required careful state mapping |
+
+## Lessons Learned
+
+### Lambda Wrapper Architecture
+When converting a LangGraph/LangChain workflow to Step Functions + Lambda:
+
+1. **State must be explicitly mapped**: LangGraph passes full `AgentState` dict between nodes. Lambda wrappers must:
+   - Extract relevant fields from `event`
+   - Pass them to the node function
+   - Return ALL relevant fields (not just the obvious ones like `score`)
+
+2. **Structured data vs strings**: The original workflow used `critique_details` (dict with `status`, `scores`, `actionable_feedback`) for the revision loop. Simply passing `critique` (string) broke revision mode detection.
+
+3. **Step Functions Pass states are destructive**: Using `Parameters` in a Pass state replaces the entire input. Must explicitly list ALL fields to preserve, including optional ones like `critique_details`.
+
+4. **Handler paths matter**: Files at Lambda package root need handlers like `module.function`, not `subdir.module.function`.
+
+5. **Dependencies cascade**: `src/nodes/critic.py` imports `vaderSentiment`, which wasn't in the Lambda package. Always trace import chains.
 
 ---
 
@@ -351,6 +426,8 @@ aws cloudfront delete-distribution --id E1CVZ9XDKUA980 --if-match <ETAG>
 # 2. S3 buckets
 aws s3 rm s3://swot-agent-frontend-691210491730 --recursive
 aws s3 rb s3://swot-agent-frontend-691210491730
+aws s3 rm s3://swot-agent-deployment-691210491730 --recursive
+aws s3 rb s3://swot-agent-deployment-691210491730
 aws s3 rm s3://swot-agent-tfstate-691210491730 --recursive
 aws s3 rb s3://swot-agent-tfstate-691210491730
 

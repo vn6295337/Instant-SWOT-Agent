@@ -22,6 +22,17 @@ class DecimalEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+def convert_floats_to_decimal(obj):
+    """Recursively convert floats to Decimal for DynamoDB compatibility."""
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: convert_floats_to_decimal(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_floats_to_decimal(item) for item in obj]
+    return obj
+
+
 def create_workflow(workflow_id: str, company: str, ticker: str, strategy_focus: str = None) -> Dict:
     """Create new workflow entry in DynamoDB."""
     now = datetime.utcnow()
@@ -69,6 +80,9 @@ def get_workflow(workflow_id: str) -> Optional[Dict]:
 def update_workflow(workflow_id: str, updates: Dict[str, Any]) -> None:
     """Update workflow state in DynamoDB."""
     updates['updated_at'] = datetime.utcnow().isoformat()
+
+    # Convert floats to Decimal for DynamoDB compatibility
+    updates = convert_floats_to_decimal(updates)
 
     update_expr_parts = []
     expr_attr_values = {}
@@ -153,6 +167,9 @@ def get_cached_analysis(ticker: str) -> Optional[Dict]:
 def cache_analysis(ticker: str, result: Dict) -> None:
     """Cache completed analysis with 24h TTL."""
     expires_at = int((datetime.utcnow() + timedelta(hours=24)).timestamp())
+
+    # Convert floats to Decimal for DynamoDB
+    result = convert_floats_to_decimal(result)
 
     item = {
         'ticker': ticker.upper(),

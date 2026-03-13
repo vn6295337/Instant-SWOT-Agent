@@ -39,21 +39,35 @@ def lambda_handler(event, context):
         # Import and run the existing analyzer node function
         from src.nodes.analyzer import analyzer_node
 
-        # Create state for analyzer
+        # Get critique_details for revision mode detection (critical for agentic loop)
+        critique_details = event.get('critique_details', {})
+
+        # Get metric reference from previous runs (for numeric validation)
+        metric_reference = event.get('metric_reference', {})
+        metric_reference_hash = event.get('metric_reference_hash', '')
+
+        # Create state for analyzer - must include all fields for revision mode
         state = {
             'company_name': company,
             'ticker': ticker,
             'strategy_focus': event.get('strategy_focus', 'general'),
             'raw_data': event.get('raw_data', {}),
             'critique': critique,
+            'critique_details': critique_details,  # CRITICAL: enables revision mode
             'revision_count': revision_count,
-            'draft_report': event.get('draft_report', '')
+            'draft_report': event.get('draft_report', ''),
+            'metric_reference': metric_reference,
+            'metric_reference_hash': metric_reference_hash
         }
 
         # Run analyzer
         result = analyzer_node(state, workflow_id=workflow_id)
         draft_report = result.get('draft_report', '')
         provider_used = result.get('provider_used', 'unknown')
+
+        # Get updated metric reference (set during first pass, persists through revisions)
+        new_metric_reference = result.get('metric_reference', metric_reference)
+        new_metric_reference_hash = result.get('metric_reference_hash', metric_reference_hash)
 
         add_activity_log(workflow_id, 'Analyzer', f'SWOT analysis generated using {provider_used}')
         update_workflow(workflow_id, {
@@ -63,10 +77,13 @@ def lambda_handler(event, context):
         })
 
         # Return updated state for next step
+        # Include metric_reference for Critic's numeric validation
         return {
             **event,
             'draft_report': draft_report,
             'provider_used': provider_used,
+            'metric_reference': new_metric_reference,
+            'metric_reference_hash': new_metric_reference_hash,
             'current_step': 'Analyzer'
         }
 
@@ -75,8 +92,11 @@ def lambda_handler(event, context):
         add_activity_log(workflow_id, 'Error', error_msg)
 
         # Return with error but don't fail workflow - critic will catch it
+        # Include required fields with defaults to prevent Step Functions errors
         return {
             **event,
             'draft_report': f'Error generating analysis: {str(e)}',
+            'metric_reference': event.get('metric_reference', {}),
+            'metric_reference_hash': event.get('metric_reference_hash', ''),
             'current_step': 'Analyzer'
         }

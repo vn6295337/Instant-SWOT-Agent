@@ -22,11 +22,11 @@
     },
     "CheckScore": {
       "Type": "Choice",
-      "Comment": "Exit if score >= 7 OR revision_count >= 3",
+      "Comment": "Exit if score >= 6 (matches original should_continue logic) OR revision_count >= 3",
       "Choices": [
         {
           "Or": [
-            { "Variable": "$.score", "NumericGreaterThanEquals": 7 },
+            { "Variable": "$.score", "NumericGreaterThanEquals": 6 },
             { "Variable": "$.revision_count", "NumericGreaterThanEquals": 3 }
           ],
           "Next": "Complete"
@@ -46,7 +46,7 @@
     },
     "SetRevisionCount": {
       "Type": "Pass",
-      "Comment": "Apply the incremented revision count",
+      "Comment": "Apply the incremented revision count with full state for revision mode",
       "Parameters": {
         "workflow_id.$": "$.workflow_id",
         "company.$": "$.company",
@@ -55,6 +55,9 @@
         "revision_count.$": "$.revision_increment.new_count",
         "raw_data.$": "$.raw_data",
         "critique.$": "$.critique",
+        "critique_details.$": "$.critique_details",
+        "metric_reference.$": "$.metric_reference",
+        "metric_reference_hash.$": "$.metric_reference_hash",
         "draft_report.$": "$.draft_report",
         "score.$": "$.score"
       },

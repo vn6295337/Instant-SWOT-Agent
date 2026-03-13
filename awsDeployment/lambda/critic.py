@@ -33,14 +33,20 @@ def lambda_handler(event, context):
         # Import and run the existing critic node function
         from src.nodes.critic import critic_node
 
-        # Create state for critic
+        # Get metric_reference from Analyzer output (needed for numeric validation)
+        metric_reference = event.get('metric_reference', {})
+        metric_reference_hash = event.get('metric_reference_hash', '')
+
+        # Create state for critic - include metric_reference for validation
         state = {
             'company_name': event.get('company'),
             'ticker': event.get('ticker'),
             'strategy_focus': event.get('strategy_focus', 'general'),
             'raw_data': event.get('raw_data', {}),
             'draft_report': draft_report,
-            'revision_count': revision_count
+            'revision_count': revision_count,
+            'metric_reference': metric_reference,
+            'metric_reference_hash': metric_reference_hash
         }
 
         # Run critic
@@ -57,6 +63,9 @@ def lambda_handler(event, context):
         else:
             add_activity_log(workflow_id, 'Critic', f'Max revisions reached. Accepting current analysis.')
 
+        # Get critique_details for revision loop (critical for analyzer revision mode)
+        critique_details = result.get('critique_details', {})
+
         update_workflow(workflow_id, {
             'score': score,
             'critique': critique,
@@ -64,10 +73,14 @@ def lambda_handler(event, context):
         })
 
         # Return updated state for CheckScore step
+        # CRITICAL: Include critique_details for analyzer revision mode
         return {
             **event,
             'score': score,
             'critique': critique,
+            'critique_details': critique_details,
+            'metric_reference': metric_reference,
+            'metric_reference_hash': metric_reference_hash,
             'revision_count': revision_count,
             'current_step': 'Critic'
         }
@@ -77,9 +90,13 @@ def lambda_handler(event, context):
         add_activity_log(workflow_id, 'Error', error_msg)
 
         # Return with low score to trigger revision or completion
+        # Include all required fields with defaults to prevent Step Functions errors
         return {
             **event,
             'score': 5,  # Low score to potentially trigger revision
             'critique': f'Evaluation error: {str(e)}',
+            'critique_details': {'status': 'REJECTED', 'error': str(e)},
+            'metric_reference': event.get('metric_reference', {}),
+            'metric_reference_hash': event.get('metric_reference_hash', ''),
             'current_step': 'Critic'
         }
