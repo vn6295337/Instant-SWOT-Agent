@@ -8,6 +8,46 @@ This project showcases a multi-agent AI architecture that autonomously generates
 
 ---
 
+## System Architecture: Two Interlinked Projects
+
+This system comprises two complementary repositories working together:
+
+| Repository | Role | Deployment |
+|------------|------|------------|
+| **Instant-SWOT-Agent** (this repo) | Orchestration layer — coordinates agents, quality control, and user interface | [Live Demo](https://huggingface.co/spaces/vn6295337/Instant-SWOT-Agent) |
+| **[Researcher-Agent](https://github.com/vn6295337/Researcher-Agent)** | Data layer — aggregates financial data from 6 MCP servers via A2A protocol | [Live API](https://vn6295337-researcher-agent.hf.space) |
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      INSTANT SWOT AGENT                             │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐         │
+│  │Researcher│ → │ Analyst  │ → │  Critic  │ ⟲ │  Editor  │         │
+│  │  (Node)  │   │  (Node)  │   │  (Node)  │   │  (Node)  │         │
+│  └────┬─────┘   └──────────┘   └──────────┘   └──────────┘         │
+│       │ A2A Protocol (JSON-RPC 2.0)                                 │
+└───────┼─────────────────────────────────────────────────────────────┘
+        ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      RESEARCHER AGENT                               │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
+│  │Fundamentals │  │  Valuation  │  │  Volatility │                 │
+│  │ (SEC EDGAR) │  │(Yahoo Fin.) │  │(FRED+Yahoo) │                 │
+│  └─────────────┘  └─────────────┘  └─────────────┘                 │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
+│  │    Macro    │  │    News     │  │  Sentiment  │                 │
+│  │   (FRED)    │  │  (Tavily)   │  │  (Finnhub)  │                 │
+│  └─────────────┘  └─────────────┘  └─────────────┘                 │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Why separate repositories?**
+- **Independent scaling:** The data aggregation layer can be horizontally scaled independently of the orchestration layer
+- **Reusability:** Other AI agents can consume the Researcher-Agent's A2A API without coupling to SWOT-specific logic
+- **Deployment flexibility:** Each service can be updated, versioned, and deployed independently
+- **Separation of concerns:** Data collection complexity is isolated from analysis workflow complexity
+
+---
+
 ## Problem Statement
 
 Enterprise AI deployments consistently fail not because of model capability, but because of **quality unpredictability**. Strategic analysis tools face three compounding challenges:
