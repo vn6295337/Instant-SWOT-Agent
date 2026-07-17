@@ -35,7 +35,7 @@ class LLMClient:
             self.providers.append({
                 "name": "groq",
                 "key": groq_key,
-                "model": os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
+                "model": os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
                 "url": "https://api.groq.com/openai/v1/chat/completions"
             })
 
@@ -43,14 +43,14 @@ class LLMClient:
             self.providers.append({
                 "name": "gemini",
                 "key": gemini_key,
-                "model": os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+                "model": os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
             })
 
         if openrouter_key:
             self.providers.append({
                 "name": "openrouter",
                 "key": openrouter_key,
-                "model": os.getenv("OPENROUTER_MODEL", "google/gemma-3n-e4b-it:free"),
+                "model": os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-20b:free"),
                 "url": "https://openrouter.ai/api/v1/chat/completions"
             })
 

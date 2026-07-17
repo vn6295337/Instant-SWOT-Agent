@@ -1,0 +1,46 @@
+- [x] Set `GROQ_MODEL=openai/gpt-oss-20b` as a variable on the Instant-SWOT-Agent HF Space (done 2026-07-17)
+- [x] Restore Gemini: quota restored after closing the Google Cloud billing account; `GEMINI_MODEL=gemini-flash-lite-latest` set on the HF Space and confirmed serving a live analysis (2026-07-17)
+- [x] Set `OPENROUTER_MODEL=openai/gpt-oss-20b:free` as a variable on the HF Space (done 2026-07-17; model validated via direct API call)
+- [x] Run a live analysis after the model changes (MSFT run 2026-07-17: completed, 6/6 sources, served by gemini:gemini-flash-lite-latest via fallback — chain works end-to-end)
+- [x] Remove `frontend/.env.production` (deleted from working tree 2026-07-17; commit pending)
+- [ ] Commit or discard the uncommitted `BUSINESS_README.md` change
+- [ ] Push `origin/main` to the `hf` remote to close the 2-commit deployment drift (only after the `.env.production` fix)
+- [ ] After redeploy, fetch the served JS bundle and confirm it contains no `execute-api` URL
+- [x] Update code defaults in `src/llm_client.py` and `.env.example` to the new model IDs (done 2026-07-17; commit pending)
+- [x] Fix `A2A_RESEARCHER_URL` in `.env.example` (done 2026-07-17; commit pending)
+- [ ] Replace SEC EDGAR User-Agent placeholder `contact@example.com` in `Researcher-Agent/mcp-servers/fundamentals-basket/fetchers.py` with a real contact email
+- [ ] Add a LICENSE file (MIT) to Instant-SWOT-Agent
+- [ ] Add a LICENSE file (MIT) to Researcher-Agent
+- [ ] Pin Python dependencies with a lockfile (`uv pip compile` or `pip-compile`) for Instant-SWOT-Agent and rebuild
+- [ ] Pin Python dependencies for Researcher-Agent and its MCP server requirements files
+- [ ] Change Dockerfile frontend stage from `npm install --legacy-peer-deps` to `npm ci`
+- [ ] Verify a clean-clone Docker build succeeds with pinned deps (LangGraph now resolves to 1.x; confirm StateGraph workflow still runs)
+- [ ] Add GitHub Actions CI: pytest + flake8 on backend, eslint + build on frontend
+- [ ] Add GitHub Actions job to auto-mirror `main` to the HF Space using an `HF_TOKEN` secret
+- [x] Investigate the 0-revision anomaly: resolved — with working models the loop revises correctly (MSFT run: 3 revisions, score 5.7); earlier 0-revision AAPL run was likely `analyzer_revision_skipped` triggered by dead fallback models
+- [ ] Enable LangSmith tracing (`LANGCHAIN_TRACING_V2=true` + key on the HF Space) to support the loop investigation
+- [ ] Add a deep health check that pings each configured LLM with a 1-token request instead of only checking key presence
+- [x] Check the Supabase project is not paused (confirmed working 2026-07-17: https://atilxlecbaqcksnrgzav.supabase.co)
+- [ ] Document `PIPELINE_SUPABASE_URL` in `.env.example` and CLAUDE.md
+- [ ] Add missing env vars to Researcher-Agent `.env.example`: `FRED_VIX_API_KEY`, `ALPHA_VANTAGE_API_KEY`, `BLS_API_KEY`, `BEA_API_KEY`, `TRADIER_API_KEY`, `NYT_API_KEY`, `NEWSAPI_API_KEY`
+- [ ] Confirm which optional keys (NYT, NewsAPI, Alpha Vantage, Tradier, BLS, BEA) are actually set as Researcher-Agent Space secrets and prune unused ones
+- [x] Decide whether AWS or HF Spaces is the canonical backend (decided: HF; AWS backend torn down 2026-07-17 via AWS CLI — API Gateway, 8 Lambdas, Step Functions, 2 DynamoDB tables, 3 S3 buckets, 2 alarms, 8 log groups, 2 IAM roles deleted; secret `swot-agent-api-keys` scheduled for deletion 2026-07-24)
+- [ ] Remove the now-dead `awsDeployment/` directory and AWS references from the repo (or archive to a branch)
+- [ ] Fix CORS in `src/api/app.py`: replace ineffective literal `https://*.hf.space` with `allow_origin_regex`, drop `allow_credentials=True`
+- [ ] Add per-IP rate limiting (e.g., `slowapi`) and a concurrent-workflow cap on `POST /analyze`
+- [ ] Add TTL eviction for the in-memory `WORKFLOWS` dict in `src/services/workflow_store.py` and the task dict in Researcher-Agent `app.py`
+- [ ] Update README.md and CLAUDE.md to match the real workflow (no Editor node, exit threshold 6 not 7)
+- [ ] Delete dead code: `src/graph_cyclic.py`
+- [ ] Remove unused deps from `requirements.txt`: `langchain-groq`, `google-generativeai`, `tavily-python`, `mcp`
+- [ ] Fix stale `pyproject.toml`: project name, Streamlit deps, wrong repo URLs, broken `app:main` console script
+- [ ] Remove repo noise from Researcher-Agent: `reports/*.json` test artifacts, `.obsidian/` config
+- [ ] Delete the local 265MB `awsDeployment/build/` directory
+- [ ] Switch to structured JSON outputs (`response_format: json_object`) for critic/analyzer calls on Groq/OpenRouter
+- [ ] Replace deprecated `@app.on_event("startup")` with a lifespan handler in `src/api/app.py`
+- [ ] Fix local dev environment: `pip install -r requirements.txt` (pytest currently fails on missing `vaderSentiment`) and get the test suite green
+- [ ] Keep MCP server sessions persistent in Researcher-Agent instead of spawning 6 subprocesses per request
+- [ ] Add a monthly scheduled CI canary that runs one live analysis and asserts score/sections to catch silent model/API rot
+- [ ] Add a weekly keep-warm ping for both Spaces via GitHub Actions cron (optional; free tier sleeps after 48h idle)
+- [ ] Upgrade Vite 5 → 7 (EOL) and React 18 → 19 when next touching the frontend
+- [ ] Add cache headers to FastAPI `StaticFiles` serving of the frontend bundle
+- [ ] Consider SSE streaming of workflow status to replace 15s frontend polling
