@@ -3,14 +3,14 @@
 - [x] Set `OPENROUTER_MODEL=openai/gpt-oss-20b:free` as a variable on the HF Space (done 2026-07-17; model validated via direct API call)
 - [x] Run a live analysis after the model changes (MSFT run 2026-07-17: completed, 6/6 sources, served by gemini:gemini-flash-lite-latest via fallback — chain works end-to-end)
 - [x] Remove `frontend/.env.production` (deleted from working tree 2026-07-17; commit pending)
-- [ ] Commit or discard the uncommitted `BUSINESS_README.md` change
-- [ ] Push `origin/main` to the `hf` remote to close the 2-commit deployment drift (only after the `.env.production` fix)
+- [x] Commit the `BUSINESS_README.md` change (95a89bb, pushed 2026-07-18)
+- [x] Push `origin/main` to the `hf` remote — drift closed, both remotes at 7045b2d (2026-07-18)
 - [ ] After redeploy, fetch the served JS bundle and confirm it contains no `execute-api` URL
 - [x] Update code defaults in `src/llm_client.py` and `.env.example` to the new model IDs (done 2026-07-17; commit pending)
 - [x] Fix `A2A_RESEARCHER_URL` in `.env.example` (done 2026-07-17; commit pending)
-- [ ] Replace SEC EDGAR User-Agent placeholder `contact@example.com` in `Researcher-Agent/mcp-servers/fundamentals-basket/fetchers.py` with a real contact email
-- [ ] Add a LICENSE file (MIT) to Instant-SWOT-Agent
-- [ ] Add a LICENSE file (MIT) to Researcher-Agent
+- [x] Replace SEC EDGAR User-Agent placeholder with real contact (fetchers.py + config.py, pushed 2026-07-18)
+- [x] Add a LICENSE file (MIT) to Instant-SWOT-Agent (pushed 2026-07-18)
+- [x] Add a LICENSE file (MIT) to Researcher-Agent (pushed 2026-07-18)
 - [ ] Pin Python dependencies with a lockfile (`uv pip compile` or `pip-compile`) for Instant-SWOT-Agent and rebuild
 - [ ] Pin Python dependencies for Researcher-Agent and its MCP server requirements files
 - [ ] Change Dockerfile frontend stage from `npm install --legacy-peer-deps` to `npm ci`
@@ -22,7 +22,7 @@
 - [ ] Add a deep health check that pings each configured LLM with a 1-token request instead of only checking key presence
 - [x] Check the Supabase project is not paused (confirmed working 2026-07-17: https://atilxlecbaqcksnrgzav.supabase.co)
 - [ ] Document `PIPELINE_SUPABASE_URL` in `.env.example` and CLAUDE.md
-- [ ] Add missing env vars to Researcher-Agent `.env.example`: `FRED_VIX_API_KEY`, `ALPHA_VANTAGE_API_KEY`, `BLS_API_KEY`, `BEA_API_KEY`, `TRADIER_API_KEY`, `NYT_API_KEY`, `NEWSAPI_API_KEY`
+- [x] Add missing env vars to Researcher-Agent `.env.example` (pushed 2026-07-18)
 - [ ] Confirm which optional keys (NYT, NewsAPI, Alpha Vantage, Tradier, BLS, BEA) are actually set as Researcher-Agent Space secrets and prune unused ones
 - [x] Decide whether AWS or HF Spaces is the canonical backend (decided: HF; AWS backend torn down 2026-07-17 via AWS CLI — API Gateway, 8 Lambdas, Step Functions, 2 DynamoDB tables, 3 S3 buckets, 2 alarms, 8 log groups, 2 IAM roles deleted; secret `swot-agent-api-keys` scheduled for deletion 2026-07-24)
 - [ ] Remove the now-dead `awsDeployment/` directory and AWS references from the repo (or archive to a branch)
@@ -33,7 +33,7 @@
 - [ ] Delete dead code: `src/graph_cyclic.py`
 - [ ] Remove unused deps from `requirements.txt`: `langchain-groq`, `google-generativeai`, `tavily-python`, `mcp`
 - [ ] Fix stale `pyproject.toml`: project name, Streamlit deps, wrong repo URLs, broken `app:main` console script
-- [ ] Remove repo noise from Researcher-Agent: `reports/*.json` test artifacts, `.obsidian/` config
+- [x] Remove repo noise from Researcher-Agent: `reports/` and `.obsidian/` untracked + gitignored (pushed 2026-07-18)
 - [ ] Delete the local 265MB `awsDeployment/build/` directory
 - [ ] Switch to structured JSON outputs (`response_format: json_object`) for critic/analyzer calls on Groq/OpenRouter
 - [ ] Replace deprecated `@app.on_event("startup")` with a lifespan handler in `src/api/app.py`
