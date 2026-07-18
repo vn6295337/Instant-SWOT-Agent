@@ -28,3 +28,7 @@ class AgentState(TypedDict):
     metric_reference_hash: Optional[str]  # SHA256 hash for integrity verification
     # Revision tracking
     analyzer_revision_skipped: Optional[bool]  # True if revision was skipped due to LLM failure
+    # Data gate findings (Researcher -> Analyzer edge contract). Must be
+    # declared here: LangGraph drops state keys not in this schema
+    data_gaps: Optional[List[str]]
+    suspect_metrics: Optional[List[Any]]

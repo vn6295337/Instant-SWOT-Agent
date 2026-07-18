@@ -319,18 +319,14 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
                 "score": cached.get("score", 0),
                 "data_source": "cache",
                 "metrics": cached_metrics,  # Populate metrics for frontend
+                # Pass the full cached result through - a hardcoded field
+                # whitelist here silently dropped every field added after it
+                # was written (metric_reference, recommendations, quality_notes)
                 "result": {
+                    **cached,
                     "company_name": cached.get("company_name", company_name),
-                    "score": cached.get("score", 0),
-                    "revision_count": cached.get("revision_count", 0),
-                    "report_length": cached.get("report_length", 0),
-                    "critique": cached.get("critique", ""),
-                    "swot_data": cached.get("swot_data", {}),
-                    "raw_report": cached.get("raw_report", ""),
                     "data_source": "cache",
                     "provider_used": cached.get("provider_used", "cached"),
-                    "raw_data": cached.get("raw_data", {}),
-                    "_cache_info": cached.get("_cache_info", {})
                 }
             })
             return
