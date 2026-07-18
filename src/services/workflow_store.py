@@ -469,6 +469,13 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
             from src.nodes.analyzer import _generate_data_quality_notes
             quality_notes = _generate_data_quality_notes(metric_reference)
         quality_notes["assumptions"] = llm_quality_notes
+        # Surface gate findings in the user-visible quality notes
+        for gap in result.get("data_gaps") or []:
+            quality_notes.setdefault("gaps_or_stale", []).append(
+                f"Not available from data sources: {gap}")
+        for cat, key, value in result.get("suspect_metrics") or []:
+            quality_notes.setdefault("gaps_or_stale", []).append(
+                f"Discarded implausible value: {cat}.{key} = {value:g}")
 
         # Build final result
         final_result = {
