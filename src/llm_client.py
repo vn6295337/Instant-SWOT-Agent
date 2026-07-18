@@ -57,9 +57,14 @@ class LLMClient:
         if not self.providers:
             raise ValueError("No LLM API keys configured. Set at least one of: GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY")
 
-    def query(self, prompt: str, temperature: float = 0, max_tokens: int = 2048) -> Tuple[Optional[str], Optional[str], Optional[str], list]:
+    def query(self, prompt: str, temperature: float = 0, max_tokens: int = 2048,
+              json_mode: bool = False) -> Tuple[Optional[str], Optional[str], Optional[str], list]:
         """
         Query LLM with rotating fallback across providers.
+
+        json_mode=True forces valid-JSON output (response_format json_object on
+        Groq/OpenRouter, responseMimeType on Gemini). The prompt must still
+        mention JSON explicitly - providers require it.
 
         Instead of retrying same provider consecutively, rotates:
         Groq → Gemini → OpenRouter → Groq → Gemini → OpenRouter → ...
@@ -89,7 +94,8 @@ class LLMClient:
                         provider=provider,
                         prompt=prompt,
                         temperature=temperature,
-                        max_tokens=max_tokens
+                        max_tokens=max_tokens,
+                        json_mode=json_mode
                     )
                     latency_ms = int((time.perf_counter() - start_time) * 1000)
 
@@ -115,7 +121,8 @@ class LLMClient:
         response.raise_for_status()
         return response
 
-    def _call_provider(self, provider: dict, prompt: str, temperature: float, max_tokens: int) -> Tuple[Optional[str], Optional[str]]:
+    def _call_provider(self, provider: dict, prompt: str, temperature: float,
+                       max_tokens: int, json_mode: bool = False) -> Tuple[Optional[str], Optional[str]]:
         """Call a specific LLM provider."""
         headers = {"Content-Type": "application/json"}
 
@@ -131,6 +138,8 @@ class LLMClient:
             # low effort keeps the budget for actual content
             if "gpt-oss" in provider["model"]:
                 payload["reasoning_effort"] = "low"
+            if json_mode:
+                payload["response_format"] = {"type": "json_object"}
             response = self._make_request(provider["url"], headers, payload, provider["name"])
             data = response.json()
             if data and "choices" in data and data["choices"]:
@@ -146,6 +155,8 @@ class LLMClient:
                     "maxOutputTokens": max_tokens,
                 }
             }
+            if json_mode:
+                payload["generationConfig"]["responseMimeType"] = "application/json"
             response = self._make_request(url, headers, payload, provider["name"])
             data = response.json()
             if data and "candidates" in data and data["candidates"]:
@@ -166,6 +177,8 @@ class LLMClient:
                 "max_tokens": max_tokens,
                 "temperature": temperature,
             }
+            if json_mode:
+                payload["response_format"] = {"type": "json_object"}
             response = self._make_request(provider["url"], headers, payload, provider["name"])
             data = response.json()
             if data and "choices" in data and data["choices"]:

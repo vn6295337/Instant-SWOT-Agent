@@ -201,7 +201,9 @@ def run_llm_evaluation(report: str, source_data: str, iteration: int, llm) -> di
 
 Evaluate strictly and respond with JSON only."""
 
-    response, provider, error, providers_failed = llm.query(prompt, temperature=0)
+    response, provider, error, providers_failed = llm.query(
+        prompt, temperature=0, json_mode=True
+    )
 
     if error:
         # Return default middle scores on error

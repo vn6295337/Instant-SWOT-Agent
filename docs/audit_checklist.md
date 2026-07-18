@@ -35,7 +35,7 @@
 - [x] Rewrite stale `pyproject.toml` (2026-07-18)
 - [x] Remove repo noise from Researcher-Agent: `reports/` and `.obsidian/` untracked + gitignored (pushed 2026-07-18)
 - [x] Delete the local 265MB `awsDeployment/build/` directory (2026-07-18)
-- [ ] (parked by owner 2026-07-18) Switch to structured JSON outputs (`response_format: json_object`) for critic/analyzer calls on Groq/OpenRouter
+- [x] Structured JSON outputs for the critic (2026-07-18): json_mode in llm_client (response_format json_object on Groq/OpenRouter, responseMimeType on Gemini) validated against all three live providers; analyzer intentionally left as prose (its report is consumed as text by parser and UI). LangSmith item re-opened and closed same day: code was already fully @traceable-instrumented, local key validated against the LangSmith API - enabling requires LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY + LANGCHAIN_PROJECT on the HF Space (user step)
 - [x] Replace deprecated `@app.on_event` with a lifespan handler (2026-07-18)
 - [x] Test suite green: live-integration test replaced with 7 unit tests for the loop conditions; pytest now gates CI (2026-07-18)
 - [x] Persistent MCP sessions: closed as deferred-by-design (2026-07-18) — spawn-per-request is more robust (fresh process, no session locking, no respawn logic); revisit only if latency becomes a complaint
