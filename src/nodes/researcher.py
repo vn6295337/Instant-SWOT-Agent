@@ -153,6 +153,23 @@ def researcher_node(state, workflow_id=None, progress_store=None):
             state["raw_data"] = json.dumps(result, indent=2, default=str)
             state["sources_failed"] = sources_failed
 
+            # Deterministic data gate on the exact view the Analyzer consumes:
+            # metric-level gaps (DG) and impossible magnitudes (SC)
+            try:
+                from src.nodes.analyzer import _extract_key_metrics
+                from src.utils.data_gate import audit_extracted_metrics
+                audit = audit_extracted_metrics(_extract_key_metrics(state["raw_data"]))
+                state["data_gaps"] = audit["gaps"]
+                state["suspect_metrics"] = audit["suspect"]
+                if audit["gaps"]:
+                    add_log("researcher",
+                            f"Data gaps (will be marked DATA NOT PROVIDED): {', '.join(audit['gaps'])}")
+                for cat, key, value in audit["suspect"]:
+                    add_log("researcher",
+                            f"Discarded implausible value: {cat}.{key} = {value:g} (outside sanity bounds)")
+            except Exception as gate_err:
+                print(f"[data-gate] audit skipped: {gate_err}")
+
             print(f"  - Sources available: {result['sources_available']}")
             if sources_failed:
                 print(f"  - Sources failed: {sources_failed}")

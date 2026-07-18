@@ -970,13 +970,17 @@ def _format_metric_for_reference(key: str, value, temporal_info: dict = None) ->
     return formatted, as_of_date
 
 
-def _generate_metric_reference_table(extracted: dict, is_financial: bool = False) -> tuple:
+def _generate_metric_reference_table(extracted: dict, is_financial: bool = False,
+                                     data_gaps: list = None) -> tuple:
     """
     Generate an immutable metric reference table for LLM grounding.
 
     Args:
         extracted: Extracted metrics dictionary from _extract_key_metrics()
         is_financial: If True, exclude EV/EBITDA
+        data_gaps: Required metrics found missing by the data gate; rendered
+                   as an explicit MISSING section so the LLM must say
+                   "DATA NOT PROVIDED" rather than silently omit or invent
 
     Returns:
         tuple: (table_string, metric_lookup_dict)
@@ -1097,6 +1101,15 @@ def _generate_metric_reference_table(extracted: dict, is_financial: bool = False
     if sentiment_lines:
         lines.append("[SENTIMENT]")
         lines.extend(sentiment_lines)
+        lines.append("")
+
+    if data_gaps:
+        lines.append("[MISSING - REQUIRED DATA NOT AVAILABLE]")
+        lines.append("  The following required metrics could not be obtained.")
+        lines.append("  If a point would depend on one, write exactly: DATA NOT PROVIDED")
+        lines.append("  Do NOT estimate, infer, or substitute values for these:")
+        for gap in data_gaps:
+            lines.append(f"  - {gap}")
         lines.append("")
 
     lines.append("=" * 60)
@@ -1250,7 +1263,8 @@ def _build_revision_prompt(
     company_data: str,
     current_draft: str,
     is_financial: bool,
-    extracted: dict = None
+    extracted: dict = None,
+    data_gaps: list = None
 ) -> str:
     """Build revision prompt with conditional focus areas based on failed criteria.
 
@@ -1267,7 +1281,7 @@ def _build_revision_prompt(
     # Generate metric reference table for revision (same as initial mode)
     reference_table = ""
     if extracted:
-        reference_table, _ = _generate_metric_reference_table(extracted, is_financial)
+        reference_table, _ = _generate_metric_reference_table(extracted, is_financial, data_gaps=data_gaps)
     scores = critique_details.get("scores", {})
 
     # Determine which focus areas to include based on failed criteria
@@ -1406,7 +1420,8 @@ Simply output the improved SWOT as a clean, final deliverable."""
 
 
 def _build_analyzer_prompt(company: str, ticker: str, formatted_data: str,
-                           is_financial: bool, extracted: dict = None) -> tuple:
+                           is_financial: bool, extracted: dict = None,
+                           data_gaps: list = None) -> tuple:
     """Build analyzer prompt with metric reference table for hallucination prevention.
 
     Args:
@@ -1425,7 +1440,8 @@ def _build_analyzer_prompt(company: str, ticker: str, formatted_data: str,
     ref_hash = ""
 
     if extracted:
-        reference_table, metric_lookup = _generate_metric_reference_table(extracted, is_financial)
+        reference_table, metric_lookup = _generate_metric_reference_table(
+            extracted, is_financial, data_gaps=data_gaps)
         ref_hash = _compute_reference_hash(metric_lookup)
 
     if is_financial:
@@ -1509,6 +1525,12 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
 
     # Extract and format metrics for better LLM understanding
     extracted = _extract_key_metrics(raw)
+
+    # Data gate (SC): drop values the researcher flagged as implausible so
+    # they can never enter the reference table or be cited
+    from src.utils.data_gate import scrub_suspect_metrics
+    extracted = scrub_suspect_metrics(extracted, state.get("suspect_metrics") or [])
+
     formatted_data = _format_metrics_for_prompt(extracted, is_financial=is_financial)
 
     # Generate detailed data report (shown before SWOT)
@@ -1533,7 +1555,8 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
             company_data=formatted_data,
             current_draft=state.get("draft_report", ""),
             is_financial=is_financial,
-            extracted=extracted
+            extracted=extracted,
+            data_gaps=state.get("data_gaps")
         )
 
         # Update progress with revision info
@@ -1547,7 +1570,8 @@ def analyzer_node(state, workflow_id=None, progress_store=None):
         _add_activity_log(workflow_id, progress_store, "analyzer",
                           f"Calling LLM to generate SWOT analysis...")
         prompt, metric_lookup, ref_hash = _build_analyzer_prompt(
-            company, ticker, formatted_data, is_financial, extracted
+            company, ticker, formatted_data, is_financial, extracted,
+            data_gaps=state.get("data_gaps")
         )
         # Store metric reference for validation (Layer 1 hallucination prevention)
         state["metric_reference"] = metric_lookup
