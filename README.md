@@ -49,13 +49,13 @@ Most enterprise AI deployments fail not from bad models, but from lack of qualit
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          ORCHESTRATION (LangGraph)                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
-│  │  Researcher  │─▶│   Analyst    │─▶│    Critic    │─▶│    Editor    │    │
+│  │  Researcher  │─▶│   Analyst    │─▶│    Critic    │─▶│   Analyzer   │    │
 │  │              │  │  (SWOT Gen)  │  │  (Scoring)   │  │  (Revision)  │    │
 │  └──────────────┘  └──────────────┘  └──────┬───────┘  └───────┬──────┘    │
 │                                             │   score < 7      │           │
 │                                             │◀─────────────────┘           │
 │                                             ▼                              │
-│                                      score ≥ 7 or 3 revisions → [END]      │
+│                                      score ≥ 6 or 3 revisions → [END]      │
 └─────────────────────────────────────────────┬───────────────────────────────┘
                                               │
                     ┌─────────────────────────┼─────────────────────────┐
@@ -117,7 +117,7 @@ User Input (Company) → Researcher → [MCP Servers] → Raw Data
                                          ↓
 Raw Data → Analyst → SWOT Draft → Critic → Score
                                      ↓
-                        Score < 7 → Editor → Revised Draft → Critic
+                        Score < 6 → Analyzer (revision) → Critic
                         Score ≥ 7 → Final Output → User
 ```
 
@@ -128,7 +128,7 @@ Raw Data → Analyst → SWOT Draft → Critic → Score
 | **Researcher** | Gathers real-time company data | 6 MCP servers (financials, volatility, macro, valuation, news, sentiment) |
 | **Analyst** | Drafts SWOT based on selected strategy | Prompt-engineered generation |
 | **Critic** | Scores output 1-10 with reasoning | Rubric-based evaluation |
-| **Editor** | Revises based on critique | Targeted improvement |
+| **Analyzer (revision)** | Revises based on critique | Targeted improvement |
 
 **Supported Strategies:** Cost Leadership, Differentiation, Focus/Niche
 
@@ -306,7 +306,7 @@ python3 tests/test_self_correcting_loop.py
 ## Technical Characteristics
 
 - **Analysis Time**: Typically under 10 seconds (depends on API latency)
-- **Quality Loop**: Iterates until score ≥ 7/10 or max 3 revisions
+- **Quality Loop**: Iterates until score ≥ 6/10 or max 3 revisions
 - **LLM Providers**: Groq (primary) → Gemini → OpenRouter (cascading fallback)
 - **Data Sources**: 6 MCP servers aggregating SEC EDGAR, FRED, Yahoo Finance, Tavily, and Finnhub APIs
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS

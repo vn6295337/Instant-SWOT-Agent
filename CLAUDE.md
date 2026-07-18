@@ -43,19 +43,19 @@ User Input → Researcher → [6 MCP Servers] → Raw Data
                                 ↓
 Raw Data → Analyst → SWOT Draft → Critic → Score
                                     ↓
-                   Score < 7 → Editor → Revised Draft → Critic
-                   Score ≥ 7 or 3 revisions → Final Output
+                   Score < 6 → Analyzer (revision) → Critic
+                   Score ≥ 6 or 3 revisions → Final Output
 ```
 
 **Agent Workflow (LangGraph):**
 1. **Researcher** - Gathers data from MCP servers (fundamentals, volatility, macro, valuation, news, sentiment)
 2. **Analyst** - Generates SWOT draft based on strategy focus
 3. **Critic** - Scores output 1-10 with rubric-based evaluation
-4. **Editor** - Revises based on critique (loops until score ≥ 7 or 3 revisions)
+4. **Analyzer (revision mode)** - Revises based on critique (loops until score ≥ 6 or 3 revisions)
 
 **Key Files:**
 - `src/workflow/graph.py` - LangGraph workflow definition
-- `src/nodes/` - Agent implementations (researcher, analyzer, critic, editor)
+- `src/nodes/` - Agent implementations (researcher, analyzer, critic, research_gateway)
 - `src/api/app.py` - FastAPI application
 - `src/state.py` - TypedDict for workflow state
 - `frontend/src/App.tsx` - Main React component
@@ -75,10 +75,14 @@ Required (at least one LLM provider):
 - `GEMINI_API_KEY` - Fallback
 - `OPENROUTER_API_KEY` - Fallback
 
-Data sources:
+Data sources (set on the Researcher-Agent Space; this app gets data via A2A):
 - `TAVILY_API_KEY` - Web search
 - `FRED_API_KEY` - Macro data
 - `FINNHUB_API_KEY` - Sentiment/ratings
+
+Optional:
+- `PIPELINE_SUPABASE_URL` - Supabase Postgres for the 24h analysis result cache
+- `A2A_RESEARCHER_URL` - Researcher service URL (defaults to the HF Space)
 
 ## Tech Stack
 
