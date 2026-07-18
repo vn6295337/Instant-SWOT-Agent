@@ -15,8 +15,8 @@
 - [ ] Pin Python dependencies for Researcher-Agent and its MCP server requirements files
 - [ ] Change Dockerfile frontend stage from `npm install --legacy-peer-deps` to `npm ci`
 - [ ] Verify a clean-clone Docker build succeeds with pinned deps (LangGraph now resolves to 1.x; confirm StateGraph workflow still runs)
-- [ ] Add GitHub Actions CI: pytest + flake8 on backend, eslint + build on frontend
-- [ ] Add GitHub Actions job to auto-mirror `main` to the HF Space using an `HF_TOKEN` secret
+- [x] Add GitHub Actions CI (2026-07-18): flake8 critical + import smoke on backend, eslint (non-blocking) + build on frontend; pytest excluded — existing tests are live integration tests needing API keys, modernize under the test-suite item
+- [x] Add GitHub Actions auto-mirror `main` -> HF Space via `HF_TOKEN` secret (2026-07-18)
 - [x] Investigate the 0-revision anomaly: resolved — with working models the loop revises correctly (MSFT run: 3 revisions, score 5.7); earlier 0-revision AAPL run was likely `analyzer_revision_skipped` triggered by dead fallback models
 - [ ] Enable LangSmith tracing (`LANGCHAIN_TRACING_V2=true` + key on the HF Space) to support the loop investigation
 - [ ] Add a deep health check that pings each configured LLM with a 1-token request instead of only checking key presence
@@ -39,8 +39,8 @@
 - [ ] Replace deprecated `@app.on_event("startup")` with a lifespan handler in `src/api/app.py`
 - [ ] Fix local dev environment: `pip install -r requirements.txt` (pytest currently fails on missing `vaderSentiment`) and get the test suite green
 - [ ] Keep MCP server sessions persistent in Researcher-Agent instead of spawning 6 subprocesses per request
-- [ ] Add a monthly scheduled CI canary that runs one live analysis and asserts score/sections to catch silent model/API rot
-- [ ] Add a weekly keep-warm ping for both Spaces via GitHub Actions cron (optional; free tier sleeps after 48h idle)
+- [x] Add scheduled live canary: weekly (Mon 06:17 UTC) E2E analysis asserting provider, SWOT sections, and data sources (2026-07-18)
+- [x] Weekly keep-warm ping: covered by the canary's health checks against both Spaces (2026-07-18)
 - [ ] Upgrade Vite 5 → 7 (EOL) and React 18 → 19 when next touching the frontend
 - [ ] Add cache headers to FastAPI `StaticFiles` serving of the frontend bundle
 - [ ] Consider SSE streaming of workflow status to replace 15s frontend polling

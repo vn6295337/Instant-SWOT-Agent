@@ -1,0 +1,21 @@
+name: Deploy to HF Space
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-hf
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push to Hugging Face Space
+        run: |
+          git push "https://vn6295337:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/vn6295337/Instant-SWOT-Agent" HEAD:main

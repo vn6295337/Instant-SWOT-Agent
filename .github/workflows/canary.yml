@@ -1,0 +1,67 @@
+name: Weekly live canary
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health checks (also keeps free-tier Spaces awake)
+        run: |
+          curl -sSf -m 120 https://vn6295337-instant-swot-agent.hf.space/health | tee swot_health.json
+          grep -q '"llm_available":true' swot_health.json
+          curl -sSf -m 120 https://vn6295337-researcher-agent.hf.space/health | tee researcher_health.json
+          grep -q '"status":"healthy"' researcher_health.json
+
+      - name: End-to-end analysis
+        run: |
+          python3 - <<'EOF'
+          import json, sys, time, urllib.request
+
+          BASE = "https://vn6295337-instant-swot-agent.hf.space"
+
+          def call(url, payload=None):
+              req = urllib.request.Request(
+                  url,
+                  data=json.dumps(payload).encode() if payload else None,
+                  headers={"Content-Type": "application/json"},
+              )
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  return json.load(r)
+
+          wf = call(f"{BASE}/analyze", {"name": "NVIDIA Corporation", "ticker": "NVDA"})
+          wid = wf["workflow_id"]
+          print("workflow:", wid)
+
+          status = None
+          for _ in range(60):
+              time.sleep(15)
+              s = call(f"{BASE}/workflow/{wid}/status")
+              status = s.get("status")
+              print(status, s.get("current_step"))
+              if status in ("completed", "failed", "error"):
+                  break
+
+          if status != "completed":
+              sys.exit(f"canary failed: workflow status={status}")
+
+          r = call(f"{BASE}/workflow/{wid}/result")
+          swot = r.get("swot_data") or {}
+          problems = []
+          if not r.get("provider_used"):
+              problems.append("no provider_used (LLM likely failing)")
+          for section in ("strengths", "weaknesses", "opportunities", "threats"):
+              if not swot.get(section):
+                  problems.append(f"empty SWOT section: {section}")
+          srcs = (r.get("raw_data") or {}).get("sources_available") or []
+          if len(srcs) < 4:
+              problems.append(f"only {len(srcs)}/6 data sources available: {srcs}")
+
+          if problems:
+              sys.exit("canary failed: " + "; ".join(problems))
+
+          print("canary OK:", r.get("provider_used"), "| score:", r.get("score"), "| sources:", len(srcs))
+          EOF
