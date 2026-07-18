@@ -23,7 +23,7 @@
 - [x] Check the Supabase project is not paused (confirmed working 2026-07-17: https://atilxlecbaqcksnrgzav.supabase.co)
 - [x] Document `PIPELINE_SUPABASE_URL` in `.env.example` and CLAUDE.md (2026-07-18)
 - [x] Add missing env vars to Researcher-Agent `.env.example` (pushed 2026-07-18)
-- [x] Data-source access verified from live run attribution (2026-07-18): SEC EDGAR, FRED, BLS, BEA, Tavily, NewsAPI, Finnhub, Yahoo all serving on the Space. NYT/Alpha Vantage/Tradier/Reddit did not contribute — to isolate them, copy current Space key values into local .env and re-run direct endpoint tests. Local .env data keys are stale (all six failed direct tests)
+- [x] Data-source keys fully verified (2026-07-18): all 8 keys (NYT, NewsAPI, Alpha Vantage, FRED, Finnhub, Tavily, BLS, BEA) tested valid via direct API calls; live-run attribution confirms FRED/BLS/BEA/Tavily/NewsAPI/Finnhub/SEC/Yahoo serving on the Space. Earlier 'stale keys' finding was a test-harness error (shell sourcing), not a key problem. Keys live in ~/researcherAgent/.env (data) and ~/instantSWOTAgent/.env (LLM + 6 duplicated data keys); Tradier absent everywhere (volatility works without it)
 - [x] Decide whether AWS or HF Spaces is the canonical backend (decided: HF; AWS backend torn down 2026-07-17 via AWS CLI — API Gateway, 8 Lambdas, Step Functions, 2 DynamoDB tables, 3 S3 buckets, 2 alarms, 8 log groups, 2 IAM roles deleted; secret `swot-agent-api-keys` scheduled for deletion 2026-07-24)
 - [x] Remove `awsDeployment/` directory (2026-07-18; history preserves it)
 - [x] Fix CORS: `allow_origin_regex` for hf.space subdomains, credentials dropped (2026-07-18)
