@@ -3,10 +3,12 @@ Analysis and workflow route handlers.
 Handles SWOT analysis workflow lifecycle.
 """
 
+import time
 import uuid
 import threading
+from collections import defaultdict, deque
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from src.api.schemas import AnalysisRequest, WorkflowStartResponse
 from src.services.workflow_store import (
@@ -18,14 +20,62 @@ from src.services.workflow_store import (
 
 router = APIRouter()
 
+# Abuse guards for the public endpoint (in-memory, per-process)
+WORKFLOW_TTL_SECONDS = 3600       # evict finished workflows after 1h
+MAX_ACTIVE_WORKFLOWS = 3          # concurrent analyses per instance
+RATE_LIMIT_WINDOW_SECONDS = 3600
+RATE_LIMIT_MAX_REQUESTS = 10      # analyses per IP per window
+_REQUESTS_BY_IP: dict = defaultdict(deque)
+
+
+def _evict_stale_workflows():
+    """Drop workflows past TTL so the in-memory store cannot grow unbounded."""
+    cutoff = time.time() - WORKFLOW_TTL_SECONDS
+    for wid in [
+        wid for wid, wf in WORKFLOWS.items()
+        if wf.get("created_at", 0) < cutoff
+        and wf.get("status") not in ("starting", "running")
+    ]:
+        WORKFLOWS.pop(wid, None)
+
+
+def _check_rate_limit(client_ip: str):
+    now = time.time()
+    window = _REQUESTS_BY_IP[client_ip]
+    while window and window[0] < now - RATE_LIMIT_WINDOW_SECONDS:
+        window.popleft()
+    if len(window) >= RATE_LIMIT_MAX_REQUESTS:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded: max "
+                   f"{RATE_LIMIT_MAX_REQUESTS} analyses per hour per client."
+        )
+    window.append(now)
+
 
 @router.post("/analyze", response_model=WorkflowStartResponse)
-async def start_analysis(request: AnalysisRequest):
+async def start_analysis(request: AnalysisRequest, http_request: Request):
     """Start a new SWOT analysis workflow."""
+    _evict_stale_workflows()
+
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    _check_rate_limit(client_ip)
+
+    active = sum(
+        1 for wf in WORKFLOWS.values()
+        if wf.get("status") in ("starting", "running")
+    )
+    if active >= MAX_ACTIVE_WORKFLOWS:
+        raise HTTPException(
+            status_code=429,
+            detail="Server busy: too many concurrent analyses. Retry shortly."
+        )
+
     workflow_id = str(uuid.uuid4())
 
     # Initialize workflow state
     WORKFLOWS[workflow_id] = {
+        "created_at": time.time(),
         "status": "starting",
         "current_step": "input",
         "revision_count": 0,

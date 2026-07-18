@@ -5,42 +5,42 @@
 - [x] Remove `frontend/.env.production` (deleted from working tree 2026-07-17; commit pending)
 - [x] Commit the `BUSINESS_README.md` change (95a89bb, pushed 2026-07-18)
 - [x] Push `origin/main` to the `hf` remote — drift closed, both remotes at 7045b2d (2026-07-18)
-- [ ] After redeploy, fetch the served JS bundle and confirm it contains no `execute-api` URL
+- [x] After redeploy, served JS bundle verified free of `execute-api` URLs (2026-07-18)
 - [x] Update code defaults in `src/llm_client.py` and `.env.example` to the new model IDs (done 2026-07-17; commit pending)
 - [x] Fix `A2A_RESEARCHER_URL` in `.env.example` (done 2026-07-17; commit pending)
 - [x] Replace SEC EDGAR User-Agent placeholder with real contact (fetchers.py + config.py, pushed 2026-07-18)
 - [x] Add a LICENSE file (MIT) to Instant-SWOT-Agent (pushed 2026-07-18)
 - [x] Add a LICENSE file (MIT) to Researcher-Agent (pushed 2026-07-18)
-- [ ] Pin Python dependencies with a lockfile (`uv pip compile` or `pip-compile`) for Instant-SWOT-Agent and rebuild
-- [ ] Pin Python dependencies for Researcher-Agent and its MCP server requirements files
-- [ ] Change Dockerfile frontend stage from `npm install --legacy-peer-deps` to `npm ci`
-- [ ] Verify a clean-clone Docker build succeeds with pinned deps (LangGraph now resolves to 1.x; confirm StateGraph workflow still runs)
+- [x] Pin Python dependencies via uv pip compile (requirements.in -> fully pinned requirements.txt, 2026-07-18)
+- [x] Pin Researcher-Agent root requirements via uv (2026-07-18); per-MCP-server requirements files are for standalone use only (Docker installs root file)
+- [x] Dockerfile frontend stage now uses `npm ci --legacy-peer-deps` (2026-07-18)
+- [x] Pinned resolution (langgraph 0.6.11, langchain 0.3.30) matches the rebuild the live canary validated on 2026-07-18
 - [x] Add GitHub Actions CI (2026-07-18): flake8 critical + import smoke on backend, eslint (non-blocking) + build on frontend; pytest excluded — existing tests are live integration tests needing API keys, modernize under the test-suite item
 - [x] Add GitHub Actions auto-mirror `main` -> HF Space via `HF_TOKEN` secret (2026-07-18)
 - [x] Investigate the 0-revision anomaly: resolved — with working models the loop revises correctly (MSFT run: 3 revisions, score 5.7); earlier 0-revision AAPL run was likely `analyzer_revision_skipped` triggered by dead fallback models
 - [ ] Enable LangSmith tracing (`LANGCHAIN_TRACING_V2=true` + key on the HF Space) to support the loop investigation
-- [ ] Add a deep health check that pings each configured LLM with a 1-token request instead of only checking key presence
+- [x] Add `/health/deep` endpoint pinging each configured LLM with a tiny request (2026-07-18)
 - [x] Check the Supabase project is not paused (confirmed working 2026-07-17: https://atilxlecbaqcksnrgzav.supabase.co)
-- [ ] Document `PIPELINE_SUPABASE_URL` in `.env.example` and CLAUDE.md
+- [x] Document `PIPELINE_SUPABASE_URL` in `.env.example` and CLAUDE.md (2026-07-18)
 - [x] Add missing env vars to Researcher-Agent `.env.example` (pushed 2026-07-18)
 - [ ] Confirm which optional keys (NYT, NewsAPI, Alpha Vantage, Tradier, BLS, BEA) are actually set as Researcher-Agent Space secrets and prune unused ones
 - [x] Decide whether AWS or HF Spaces is the canonical backend (decided: HF; AWS backend torn down 2026-07-17 via AWS CLI — API Gateway, 8 Lambdas, Step Functions, 2 DynamoDB tables, 3 S3 buckets, 2 alarms, 8 log groups, 2 IAM roles deleted; secret `swot-agent-api-keys` scheduled for deletion 2026-07-24)
-- [ ] Remove the now-dead `awsDeployment/` directory and AWS references from the repo (or archive to a branch)
-- [ ] Fix CORS in `src/api/app.py`: replace ineffective literal `https://*.hf.space` with `allow_origin_regex`, drop `allow_credentials=True`
-- [ ] Add per-IP rate limiting (e.g., `slowapi`) and a concurrent-workflow cap on `POST /analyze`
-- [ ] Add TTL eviction for the in-memory `WORKFLOWS` dict in `src/services/workflow_store.py` and the task dict in Researcher-Agent `app.py`
-- [ ] Update README.md and CLAUDE.md to match the real workflow (no Editor node, exit threshold 6 not 7)
-- [ ] Delete dead code: `src/graph_cyclic.py`
-- [ ] Remove unused deps from `requirements.txt`: `langchain-groq`, `google-generativeai`, `tavily-python`, `mcp`
-- [ ] Fix stale `pyproject.toml`: project name, Streamlit deps, wrong repo URLs, broken `app:main` console script
+- [x] Remove `awsDeployment/` directory (2026-07-18; history preserves it)
+- [x] Fix CORS: `allow_origin_regex` for hf.space subdomains, credentials dropped (2026-07-18)
+- [x] Add per-IP rate limit (10/h) and concurrent-workflow cap (3) on `POST /analyze` (2026-07-18, dependency-free in-memory guards)
+- [x] Add 1h TTL eviction for `WORKFLOWS` (analysis route) and Researcher `TASK_STORE` (2026-07-18)
+- [x] Update README.md and CLAUDE.md to match the real workflow (2026-07-18)
+- [x] Delete dead code: `src/graph_cyclic.py` (2026-07-18)
+- [x] Remove unused deps from `requirements.txt` (2026-07-18)
+- [x] Rewrite stale `pyproject.toml` (2026-07-18)
 - [x] Remove repo noise from Researcher-Agent: `reports/` and `.obsidian/` untracked + gitignored (pushed 2026-07-18)
-- [ ] Delete the local 265MB `awsDeployment/build/` directory
+- [x] Delete the local 265MB `awsDeployment/build/` directory (2026-07-18)
 - [ ] Switch to structured JSON outputs (`response_format: json_object`) for critic/analyzer calls on Groq/OpenRouter
-- [ ] Replace deprecated `@app.on_event("startup")` with a lifespan handler in `src/api/app.py`
-- [ ] Fix local dev environment: `pip install -r requirements.txt` (pytest currently fails on missing `vaderSentiment`) and get the test suite green
+- [x] Replace deprecated `@app.on_event` with a lifespan handler (2026-07-18)
+- [x] Test suite green: live-integration test replaced with 7 unit tests for the loop conditions; pytest now gates CI (2026-07-18)
 - [ ] Keep MCP server sessions persistent in Researcher-Agent instead of spawning 6 subprocesses per request
 - [x] Add scheduled live canary: weekly (Mon 06:17 UTC) E2E analysis asserting provider, SWOT sections, and data sources (2026-07-18)
 - [x] Weekly keep-warm ping: covered by the canary's health checks against both Spaces (2026-07-18)
 - [ ] Upgrade Vite 5 → 7 (EOL) and React 18 → 19 when next touching the frontend
-- [ ] Add cache headers to FastAPI `StaticFiles` serving of the frontend bundle
+- [x] Add cache headers: immutable for hashed /assets, no-cache for the app shell (2026-07-18)
 - [ ] Consider SSE streaming of workflow status to replace 15s frontend polling

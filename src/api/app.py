@@ -29,13 +29,26 @@ if os.getenv("OPENROUTER_API_KEY"):
     _llm_providers.append("OpenRouter")
 print(f"[Startup] LLM providers available: {_llm_providers or 'NONE - check HF Spaces secrets!'}")
 
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Load stock listings on startup."""
+    await load_stock_listings()
+    yield
+
+
 app = FastAPI(
     title="Instant SWOT Agent API",
     description="Multi-agent SWOT analysis with self-correcting quality control",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan,
 )
 
-# CORS configuration for React frontend
+# CORS configuration for React frontend.
+# Note: literal wildcards like "https://*.hf.space" are NOT matched by
+# allow_origins; subdomain patterns require allow_origin_regex.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -44,22 +57,26 @@ app.add_middleware(
         "http://localhost:8081",
         "http://localhost:3000",
         "https://huggingface.co",
-        "https://*.hf.space",
     ],
-    allow_credentials=True,
+    allow_origin_regex=r"https://.*\.hf\.space",
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def cache_headers(request, call_next):
+    """Immutable caching for hashed /assets bundles; no-cache for the shell."""
+    response = await call_next(request)
+    if request.url.path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif request.url.path == "/":
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 # Include routers
 app.include_router(analysis_router)
 app.include_router(stocks_router)
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Load stock listings on startup."""
-    await load_stock_listings()
 
 
 @app.get("/health")
@@ -75,6 +92,44 @@ async def health_check():
         "active_workflows": len(WORKFLOWS),
         "llm_providers_configured": llm_status,
         "llm_available": any(llm_status.values())
+    }
+
+
+@app.get("/health/deep")
+def health_check_deep():
+    """
+    Deep health check: sends a 1-token prompt to every configured LLM provider.
+    Distinguishes 'key present' from 'model actually serves' — a plain key
+    check masked the June 2026 Gemini/OpenRouter model retirements.
+    Runs in the threadpool (sync def) since provider calls are blocking.
+    """
+    from src.llm_client import LLMClient
+
+    results = {}
+    try:
+        client = LLMClient()
+    except ValueError as e:
+        return {"status": "error", "detail": str(e), "providers": {}}
+
+    for provider in client.providers:
+        try:
+            content, error = client._call_provider(
+                provider=provider, prompt="Reply with: OK",
+                temperature=0, max_tokens=20
+            )
+            results[provider["name"]] = {
+                "model": provider["model"],
+                "ok": bool(content),
+                "error": error,
+            }
+        except Exception as e:
+            results[provider["name"]] = {
+                "model": provider["model"], "ok": False, "error": str(e)
+            }
+
+    return {
+        "status": "ok" if any(r["ok"] for r in results.values()) else "degraded",
+        "providers": results,
     }
 
 

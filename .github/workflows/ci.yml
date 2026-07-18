@@ -16,9 +16,11 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install dependencies
-        run: pip install -r requirements.txt flake8
+        run: pip install -r requirements.txt flake8 pytest
       - name: Lint (critical errors only)
         run: flake8 src --select=E9,F63,F7,F82 --show-source
+      - name: Unit tests
+        run: python -m pytest tests -q
       - name: Import smoke test
         run: python -c "from src.api.app import app; from src.workflow.graph import app as graph_app; print('imports OK')"
 
