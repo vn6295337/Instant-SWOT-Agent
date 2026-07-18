@@ -64,3 +64,17 @@ def test_dict_wrapped_values_audited():
     data["fundamentals"]["net_margin"] = {"value": 1218.0, "end_date": "2025-12-31"}
     audit = audit_extracted_metrics(data)
     assert ("fundamentals", "net_margin", 1218.0) in audit["suspect"]
+
+
+def test_reference_table_renders_missing_section():
+    import pytest
+    pytest.importorskip("vaderSentiment")
+    from src.nodes.analyzer import _generate_metric_reference_table
+
+    extracted = {"fundamentals": {"revenue": {"value": 89.5e9, "end_date": "2025-12-31"}}}
+    table, _lookup = _generate_metric_reference_table(
+        extracted, data_gaps=["valuation: pe_trailing", "macro: gdp_growth"]
+    )
+    assert "MISSING - REQUIRED DATA NOT AVAILABLE" in table
+    assert "DATA NOT PROVIDED" in table
+    assert "valuation: pe_trailing" in table
