@@ -127,6 +127,10 @@ class LLMClient:
                 "max_tokens": max_tokens,
                 "temperature": temperature,
             }
+            # gpt-oss reasoning models burn max_tokens on hidden reasoning;
+            # low effort keeps the budget for actual content
+            if "gpt-oss" in provider["model"]:
+                payload["reasoning_effort"] = "low"
             response = self._make_request(provider["url"], headers, payload, provider["name"])
             data = response.json()
             if data and "choices" in data and data["choices"]:

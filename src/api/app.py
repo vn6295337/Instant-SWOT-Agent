@@ -113,9 +113,11 @@ def health_check_deep():
 
     for provider in client.providers:
         try:
+            # 512 tokens: reasoning models (gpt-oss) spend budget on hidden
+            # reasoning before emitting content; 20 tokens returns "" content
             content, error = client._call_provider(
                 provider=provider, prompt="Reply with: OK",
-                temperature=0, max_tokens=20
+                temperature=0, max_tokens=512
             )
             results[provider["name"]] = {
                 "model": provider["model"],
