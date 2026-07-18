@@ -105,6 +105,14 @@ export interface QualityNotes {
   assumptions: string[]
 }
 
+export interface MetricReferenceEntry {
+  ref: string
+  key: string
+  value: number
+  as_of?: string | null
+  category: string
+}
+
 export interface AnalysisResponse {
   company_name: string
   business_address?: string
@@ -120,4 +128,6 @@ export interface AnalysisResponse {
     threats: string[]
   }
   raw_data?: MCPRawData
+  recommendations?: string[]
+  metric_reference?: MetricReferenceEntry[]
 }

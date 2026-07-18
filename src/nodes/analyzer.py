@@ -1382,6 +1382,13 @@ Produce a complete, revised SWOT analysis with this exact structure (3-5 points 
 ## Threats
 - [M13] Interest Rate: 3.72% - Higher borrowing costs may impact margins
 
+
+INTERPRETATION GUARDRAILS:
+- VIX bands: below 20 = calm/low volatility, 20-30 = elevated, above 30 = high fear. NEVER describe VIX under 20 as "elevated" or "fear"
+- Margins under 10% are weak, not evidence of "cost control" or "pricing power"
+- Weaknesses = company-internal factors ONLY; Threats = external/market factors ONLY (VIX, interest rates, inflation, beta belong in Threats)
+- NEVER cite the same metric in both Weaknesses and Threats
+
 CRITICAL REQUIREMENTS:
 1. Each point MUST start with metric reference in brackets: [M##]
 2. Format: [M##] Metric: Value - Strategic insight
@@ -1449,6 +1456,13 @@ Produce a SWOT analysis with this exact structure (3-5 points per section):
 
 ## Threats
 - [M13] Interest Rate: 3.72% - Higher borrowing costs may impact margins
+
+
+INTERPRETATION GUARDRAILS:
+- VIX bands: below 20 = calm/low volatility, 20-30 = elevated, above 30 = high fear. NEVER describe VIX under 20 as "elevated" or "fear"
+- Margins under 10% are weak, not evidence of "cost control" or "pricing power"
+- Weaknesses = company-internal factors ONLY; Threats = external/market factors ONLY (VIX, interest rates, inflation, beta belong in Threats)
+- NEVER cite the same metric in both Weaknesses and Threats
 
 CRITICAL REQUIREMENTS:
 1. Each point MUST start with metric reference in brackets: [M##]

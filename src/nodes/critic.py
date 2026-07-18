@@ -74,6 +74,7 @@ You are a quality gate, not a collaborator. Be strict.
 - 9-10: Identifies causal relationships; 7-8: Good synthesis; 5-6: Surface-level; 3-4: Restates metrics; 1-2: No value-add
 
 ### 5. Completeness & Balance (10%)
+- Classification correctness: Weaknesses must be company-internal factors; Threats must be external/market factors (VIX, rates, inflation, beta). Deduct for external factors listed as Weaknesses and for the same metric appearing in both Weaknesses and Threats; name each such error in key_deficiencies
 Required sections:
 - Strengths (Finding, Strategic Implication, Durability)
 - Weaknesses (Finding, Severity, Trend, Remediation Levers)

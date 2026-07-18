@@ -397,8 +397,8 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
         provider_used = result.get("provider_used", "")
         llm_status = WORKFLOWS[workflow_id]["llm_status"]
 
-        # Mark failed providers
-        for provider in llm_providers_failed:
+        # Mark failed providers (dedupe: one log line per provider, not per call)
+        for provider in dict.fromkeys(llm_providers_failed):
             if provider in llm_status:
                 llm_status[provider] = "failed"
                 add_activity_log(workflow_id, "llm", f"{provider.capitalize()} provider failed")
@@ -421,8 +421,13 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
             })
             return
 
-        # Parse SWOT from draft report
-        swot_data = parse_swot_text(result.get("draft_report", ""))
+        # Parse SWOT from draft report (edge contract: uncited lines become
+        # recommendations, data-quality prose is separated - neither leaks
+        # into the quadrant tables)
+        parsed_sections = parse_swot_text(result.get("draft_report", ""))
+        recommendations = parsed_sections.pop("recommendations", [])
+        llm_quality_notes = parsed_sections.pop("data_quality_notes", [])
+        swot_data = parsed_sections
 
         # Supplement with MCP-aggregated SWOT data (ensures weaknesses/threats aren't lost)
         try:
@@ -463,7 +468,7 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
         if metric_reference:
             from src.nodes.analyzer import _generate_data_quality_notes
             quality_notes = _generate_data_quality_notes(metric_reference)
-            quality_notes["assumptions"] = []  # LLM assumptions added later if available
+        quality_notes["assumptions"] = llm_quality_notes
 
         # Build final result
         final_result = {
@@ -478,6 +483,20 @@ def run_workflow_background(workflow_id: str, company_name: str, ticker: str, st
             "raw_report": result.get("draft_report", ""),
             "data_source": result.get("data_source", "unknown"),
             "provider_used": result.get("provider_used", "unknown"),
+            "recommendations": recommendations,
+            # Canonical [M##] list - the SAME numbering the SWOT text cites.
+            # UI/PDF must render their Quantitative Data table from this, not
+            # from the streamed metrics (whose row order produced misaligned refs)
+            "metric_reference": [
+                {
+                    "ref": ref_id,
+                    "key": entry.get("key"),
+                    "value": entry.get("raw_value"),
+                    "as_of": entry.get("as_of_date"),
+                    "category": entry.get("category"),
+                }
+                for ref_id, entry in sorted(metric_reference.items())
+            ],
             "raw_data": raw_data_parsed
         }
 

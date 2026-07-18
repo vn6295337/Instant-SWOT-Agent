@@ -1,6 +1,6 @@
 import React from "react"
 import type { MetricEntry } from "@/lib/api"
-import type { MCPRawData } from "@/lib/types"
+import type { MCPRawData, MetricReferenceEntry } from "@/lib/types"
 import {
   ExternalLink,
   Building2,
@@ -10,6 +10,9 @@ import {
 
 interface MCPDataPanelProps {
   metrics: MetricEntry[]
+  // Canonical [M##] list from the completed analysis - when present, the
+  // Quantitative Data table renders from it so refs match the SWOT text
+  metricReference?: MetricReferenceEntry[]
   rawData?: MCPRawData
   companyName?: string
   ticker?: string
@@ -362,8 +365,8 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
 
   // Build quantitative rows for table display
   const quantitativeRows = React.useMemo(() => {
-    const categories = ['fundamentals', 'valuation', 'volatility', 'macro']
     const rows: Array<{
+      ref: string
       metric: string
       value: string
       dataType: string
@@ -372,9 +375,41 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
       category: string
     }> = []
 
+    // Preferred path: render from the canonical reference list so the Ref
+    // column matches the [M##] citations in the SWOT text exactly
+    if (metricReference && metricReference.length > 0) {
+      const findStreamed = (key: string) => {
+        const aliases: Record<string, string[]> = {
+          eps: ['eps'], vix: ['vix'],
+          historical_volatility: ['hist_vol', 'historical_volatility'],
+          gdp_growth: ['gdp_growth'],
+        }
+        const names = aliases[key] || [key]
+        return metrics.find(m => names.includes(m.metric.toLowerCase()))
+      }
+      for (const entry of metricReference) {
+        const streamed = findStreamed(entry.key)
+        const cat = entry.category || 'fundamentals'
+        rows.push({
+          ref: entry.ref,
+          metric: entry.key,
+          value: formatValue(entry.value, entry.key),
+          dataType: inferDataType(streamed?.form, entry.key),
+          asOf: normalizeDate(entry.as_of ?? streamed?.end_date),
+          source: inferDataSource(cat, entry.key, streamed?.form, streamed?.data_source),
+          category: cat.charAt(0).toUpperCase() + cat.slice(1)
+        })
+      }
+      return rows
+    }
+
+    // Fallback: streamed metrics with positional refs (pre-completion or
+    // results cached before metric_reference existed)
+    const categories = ['fundamentals', 'valuation', 'volatility', 'macro']
     for (const cat of categories) {
       for (const m of groupedMetrics[cat] || []) {
         rows.push({
+          ref: `M${String(rows.length + 1).padStart(2, '0')}`,
           metric: m.metric,
           value: formatValue(m.value, m.metric),
           dataType: inferDataType(m.form, m.metric),
@@ -385,7 +420,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
       }
     }
     return rows
-  }, [groupedMetrics])
+  }, [groupedMetrics, metricReference, metrics])
 
   // Extract news articles from raw_data if available
   // Actual structure: rawData.metrics.news.items[]
@@ -657,7 +692,7 @@ export function MCPDataPanel({ metrics, rawData, companyName, ticker, exchange, 
               <tbody className="divide-y divide-border">
                 {quantitativeRows.map((row, idx) => (
                   <tr key={idx} className="hover:bg-muted/20">
-                    <td className="px-3 py-1.5 text-muted-foreground">M{String(idx + 1).padStart(2, '0')}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground">{row.ref}</td>
                     <td className="px-3 py-1.5">{formatMetricName(row.metric)}</td>
                     <td className="px-3 py-1.5 text-right font-medium">{row.value}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{row.dataType}</td>

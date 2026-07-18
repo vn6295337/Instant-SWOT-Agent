@@ -103,6 +103,30 @@ def values_match(found_value: float, expected_value: float, value_type: str = "u
     return abs(found_value - expected_value) <= tolerance
 
 
+def matches_at_display_precision(cited_str: str, found_value: float,
+                                 expected_value: float) -> bool:
+    """
+    Accept a citation that is exact at the precision it was displayed with.
+
+    The reference table itself shows rounded values (e.g. "$2.2B" for
+    2,237,000,000), so a citation copied verbatim from the table can differ
+    from the raw value by more than the relative tolerance. If the cited
+    string has N decimals at unit U, allow half a unit of the last digit:
+    "2.2B" -> tolerance 0.05e9.
+    """
+    if found_value is None or expected_value is None:
+        return False
+
+    m = re.search(r'(\d+(?:\.(\d+))?)\s*([BMK%]?)', cited_str.replace(',', ''))
+    if not m:
+        return False
+
+    decimals = len(m.group(2)) if m.group(2) else 0
+    unit = {'B': 1e9, 'M': 1e6, 'K': 1e3}.get(m.group(3), 1.0)
+    tolerance = 0.5 * (10 ** -decimals) * unit
+    return abs(found_value - expected_value) <= tolerance
+
+
 def extract_citations(text: str) -> list[dict]:
     """
     Extract all [M##] citations from text.
@@ -219,7 +243,8 @@ def validate_citations(swot_text: str, metric_reference: dict) -> dict:
             )
             result["valid"] = False
             detail["status"] = "parse_error"
-        elif not values_match(cited_normalized, expected_value):
+        elif not values_match(cited_normalized, expected_value) and \
+                not matches_at_display_precision(cited_value, cited_normalized, expected_value):
             # Format expected value for display
             if abs(expected_value) >= 1e9:
                 expected_display = f"${expected_value/1e9:.1f}B"
@@ -228,8 +253,10 @@ def validate_citations(swot_text: str, metric_reference: dict) -> dict:
             else:
                 expected_display = expected_formatted.split(" (as of")[0] if " (as of" in expected_formatted else expected_formatted
 
+            # Include raw values so the message can never look self-contradictory
             result["mismatches"].append(
-                f"{metric_key} [{ref_id}]: cited {cited_value}, expected {expected_display}"
+                f"{metric_key} [{ref_id}]: cited {cited_value} ({cited_normalized:g}), "
+                f"expected {expected_display} ({expected_value:g})"
             )
             result["valid"] = False
             detail["status"] = "mismatch"
@@ -403,7 +430,13 @@ def validate_minimum_citations(swot_text: str, metric_reference: dict, min_ratio
             "message": str
         }
     """
-    citations_found = get_citation_count(swot_text)
+    # Coverage = how many DISTINCT available metrics are cited; counting
+    # duplicate citations produced nonsense like "20/16 (125%)"
+    unique_refs = {f"M{n}" for n in CITATION_REF_PATTERN.findall(swot_text)}
+    if metric_reference:
+        citations_found = len(unique_refs & set(metric_reference.keys()))
+    else:
+        citations_found = len(unique_refs)
     metrics_available = len(metric_reference) if metric_reference else 0
 
     if metrics_available == 0:
