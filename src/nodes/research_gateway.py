@@ -58,7 +58,12 @@ async def send_message(message_text: str) -> dict:
                 json=request,
                 timeout=30
             )
-            data = response.json()
+            try:
+                data = response.json()
+            except ValueError:
+                raise ResearchGatewayError(
+                    f"Service returned non-JSON (HTTP {response.status_code}) - possibly restarting"
+                )
 
             if "error" in data:
                 raise ResearchGatewayError(f"A2A error: {data['error']}")
@@ -93,7 +98,12 @@ async def get_task_status(task_id: str) -> dict:
                 json=request,
                 timeout=30
             )
-            data = response.json()
+            try:
+                data = response.json()
+            except ValueError:
+                raise ResearchGatewayError(
+                    f"Service returned non-JSON (HTTP {response.status_code}) - possibly restarting"
+                )
 
             if "error" in data:
                 raise ResearchGatewayError(f"A2A error: {data['error']}")
@@ -244,6 +254,12 @@ async def call_research_service(
         try:
             result = await send_message(message)
         except ResearchGatewayError as e:
+            if attempt == 0:
+                if add_log:
+                    add_log("researcher",
+                            f"A2A submit failed ({str(e)[:80]}) - retrying in 10s...")
+                await asyncio.sleep(10)
+                continue
             if add_log:
                 add_log("researcher", f"A2A request failed: {str(e)}")
             raise
