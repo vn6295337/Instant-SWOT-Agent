@@ -120,6 +120,10 @@ export async function startAnalysis(
   return response.json()
 }
 
+export function getWorkflowEventsUrl(workflowId: string): string {
+  return `${API_BASE_URL}/workflow/${workflowId}/events`
+}
+
 export async function getWorkflowStatus(workflowId: string): Promise<WorkflowStatus> {
   const response = await fetch(`${API_BASE_URL}/workflow/${workflowId}/status`)
 

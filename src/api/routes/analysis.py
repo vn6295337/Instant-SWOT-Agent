@@ -112,13 +112,8 @@ async def start_analysis(request: AnalysisRequest, http_request: Request):
     return {"workflow_id": workflow_id}
 
 
-@router.get("/workflow/{workflow_id}/status")
-async def get_workflow_status(workflow_id: str):
-    """Get current status of a workflow."""
-    if workflow_id not in WORKFLOWS:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-
-    workflow = WORKFLOWS[workflow_id]
+def _status_payload(workflow: dict) -> dict:
+    """Status snapshot shared by the polling and SSE endpoints."""
     response = {
         "status": workflow.get("status", "unknown"),
         "current_step": workflow.get("current_step", "unknown"),
@@ -137,6 +132,59 @@ async def get_workflow_status(workflow_id: str):
         response["error"] = workflow.get("error", "Unknown error")
 
     return response
+
+
+@router.get("/workflow/{workflow_id}/status")
+async def get_workflow_status(workflow_id: str):
+    """Get current status of a workflow."""
+    if workflow_id not in WORKFLOWS:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    return _status_payload(WORKFLOWS[workflow_id])
+
+
+@router.get("/workflow/{workflow_id}/events")
+async def stream_workflow_events(workflow_id: str):
+    """
+    Server-Sent Events stream of workflow status.
+
+    Emits a status snapshot whenever it changes (checked every second) and
+    closes after a terminal status. The frontend falls back to polling
+    /status if SSE is unavailable.
+    """
+    import asyncio
+    import json as _json
+
+    from fastapi.responses import StreamingResponse
+
+    if workflow_id not in WORKFLOWS:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    async def event_stream():
+        last_sent = None
+        # Hard cap: 15 min per connection so abandoned tabs cannot pin
+        # the stream forever
+        for _ in range(900):
+            workflow = WORKFLOWS.get(workflow_id)
+            if workflow is None:
+                yield 'data: {"status": "error", "error": "Workflow evicted"}\n\n'
+                return
+            payload = _json.dumps(_status_payload(workflow))
+            if payload != last_sent:
+                yield f"data: {payload}\n\n"
+                last_sent = payload
+            if workflow.get("status") in ("completed", "aborted", "error"):
+                return
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/workflow/{workflow_id}/retry-mcp/{mcp_name}")

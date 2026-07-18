@@ -18,12 +18,12 @@
 - [x] Add GitHub Actions CI (2026-07-18): flake8 critical + import smoke on backend, eslint (non-blocking) + build on frontend; pytest excluded — existing tests are live integration tests needing API keys, modernize under the test-suite item
 - [x] Add GitHub Actions auto-mirror `main` -> HF Space via `HF_TOKEN` secret (2026-07-18)
 - [x] Investigate the 0-revision anomaly: resolved — with working models the loop revises correctly (MSFT run: 3 revisions, score 5.7); earlier 0-revision AAPL run was likely `analyzer_revision_skipped` triggered by dead fallback models
-- [ ] Enable LangSmith tracing (`LANGCHAIN_TRACING_V2=true` + key on the HF Space) to support the loop investigation
+- [x] LangSmith tracing: closed as on-demand-only — loop issue was resolved without it; enable via `LANGCHAIN_TRACING_V2=true` + key on the Space if debugging is ever needed (decision 2026-07-18)
 - [x] Add `/health/deep` endpoint pinging each configured LLM with a tiny request (2026-07-18)
 - [x] Check the Supabase project is not paused (confirmed working 2026-07-17: https://atilxlecbaqcksnrgzav.supabase.co)
 - [x] Document `PIPELINE_SUPABASE_URL` in `.env.example` and CLAUDE.md (2026-07-18)
 - [x] Add missing env vars to Researcher-Agent `.env.example` (pushed 2026-07-18)
-- [ ] Confirm which optional keys (NYT, NewsAPI, Alpha Vantage, Tradier, BLS, BEA) are actually set as Researcher-Agent Space secrets and prune unused ones
+- [x] Data-source access verified from live run attribution (2026-07-18): SEC EDGAR, FRED, BLS, BEA, Tavily, NewsAPI, Finnhub, Yahoo all serving on the Space. NYT/Alpha Vantage/Tradier/Reddit did not contribute — to isolate them, copy current Space key values into local .env and re-run direct endpoint tests. Local .env data keys are stale (all six failed direct tests)
 - [x] Decide whether AWS or HF Spaces is the canonical backend (decided: HF; AWS backend torn down 2026-07-17 via AWS CLI — API Gateway, 8 Lambdas, Step Functions, 2 DynamoDB tables, 3 S3 buckets, 2 alarms, 8 log groups, 2 IAM roles deleted; secret `swot-agent-api-keys` scheduled for deletion 2026-07-24)
 - [x] Remove `awsDeployment/` directory (2026-07-18; history preserves it)
 - [x] Fix CORS: `allow_origin_regex` for hf.space subdomains, credentials dropped (2026-07-18)
@@ -35,12 +35,12 @@
 - [x] Rewrite stale `pyproject.toml` (2026-07-18)
 - [x] Remove repo noise from Researcher-Agent: `reports/` and `.obsidian/` untracked + gitignored (pushed 2026-07-18)
 - [x] Delete the local 265MB `awsDeployment/build/` directory (2026-07-18)
-- [ ] Switch to structured JSON outputs (`response_format: json_object`) for critic/analyzer calls on Groq/OpenRouter
+- [ ] (parked by owner 2026-07-18) Switch to structured JSON outputs (`response_format: json_object`) for critic/analyzer calls on Groq/OpenRouter
 - [x] Replace deprecated `@app.on_event` with a lifespan handler (2026-07-18)
 - [x] Test suite green: live-integration test replaced with 7 unit tests for the loop conditions; pytest now gates CI (2026-07-18)
-- [ ] Keep MCP server sessions persistent in Researcher-Agent instead of spawning 6 subprocesses per request
+- [x] Persistent MCP sessions: closed as deferred-by-design (2026-07-18) — spawn-per-request is more robust (fresh process, no session locking, no respawn logic); revisit only if latency becomes a complaint
 - [x] Add scheduled live canary: weekly (Mon 06:17 UTC) E2E analysis asserting provider, SWOT sections, and data sources (2026-07-18)
 - [x] Weekly keep-warm ping: covered by the canary's health checks against both Spaces (2026-07-18)
-- [ ] Upgrade Vite 5 → 7 (EOL) and React 18 → 19 when next touching the frontend
+- [x] Upgrade Vite 5 → 7.3.6 and React 18 → 19.2.7 (2026-07-18): tsc clean, 10/10 unit tests pass, production build OK; Docker builder bumped to node:22-slim; stale ActivityLog tests rewritten for current component API
 - [x] Add cache headers: immutable for hashed /assets, no-cache for the app shell (2026-07-18)
-- [ ] Consider SSE streaming of workflow status to replace 15s frontend polling
+- [x] SSE streaming of workflow status (2026-07-18): GET /workflow/{id}/events (1s change-driven snapshots, 15min cap) with EventSource-first frontend transport and automatic fallback to the original 700ms polling
