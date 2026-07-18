@@ -108,7 +108,8 @@ async def wait_for_completion(
     task_id: str,
     timeout: float = None,
     progress_callback: Optional[Callable] = None,
-    add_log: Optional[Callable] = None
+    add_log: Optional[Callable] = None,
+    emitted_metrics: Optional[Set[str]] = None
 ) -> dict:
     """
     Poll task status until completed or failed.
@@ -119,6 +120,8 @@ async def wait_for_completion(
         timeout: Max seconds to wait (default: A2A_TIMEOUT)
         progress_callback: Optional callback for granular metrics (source, metric, value)
         add_log: Optional callback for activity logging (step, message)
+        emitted_metrics: Optional shared dedup set so a resubmitted task does
+            not re-emit metrics already shown
 
     Returns:
         Completed task dict with artifacts
@@ -127,7 +130,8 @@ async def wait_for_completion(
         timeout = A2A_TIMEOUT
 
     elapsed = 0
-    emitted_metrics: Set[str] = set()  # Track which metrics we've already emitted
+    if emitted_metrics is None:
+        emitted_metrics = set()  # Track which metrics we've already emitted
 
     while elapsed < timeout:
         task = await get_task_status(task_id)
@@ -228,33 +232,49 @@ async def call_research_service(
     if add_log:
         add_log("researcher", f"A2A handshake successful")
 
-    # Send message to start task
-    if add_log:
-        add_log("researcher", f"Submitting research task for {company} ({ticker})...")
-
-    try:
-        result = await send_message(message)
-    except ResearchGatewayError as e:
+    # Submit and wait, resubmitting once if the Research Service loses the
+    # task mid-run (its task store is in-memory, so a Space deploy/restart
+    # between submission and completion drops in-flight tasks)
+    emitted_metrics: Set[str] = set()  # shared dedup across resubmission
+    task = None
+    for attempt in range(2):
         if add_log:
-            add_log("researcher", f"A2A request failed: {str(e)}")
-        raise
+            add_log("researcher", f"Submitting research task for {company} ({ticker})...")
 
-    task_id = result.get("task", {}).get("id")
+        try:
+            result = await send_message(message)
+        except ResearchGatewayError as e:
+            if add_log:
+                add_log("researcher", f"A2A request failed: {str(e)}")
+            raise
 
-    if not task_id:
-        raise ResearchGatewayError("No task ID returned from message/send")
+        task_id = result.get("task", {}).get("id")
 
-    logger.info(f"Task created: {task_id}")
-    if add_log:
-        add_log("researcher", f"Task submitted: {task_id[:8]}...")
-        add_log("researcher", "Fetching data from 6 MCP servers in parallel...")
+        if not task_id:
+            raise ResearchGatewayError("No task ID returned from message/send")
 
-    # Wait for completion with partial metrics streaming
-    task = await wait_for_completion(
-        task_id,
-        progress_callback=progress_callback,
-        add_log=add_log
-    )
+        logger.info(f"Task created: {task_id}")
+        if add_log:
+            add_log("researcher", f"Task submitted: {task_id[:8]}...")
+            add_log("researcher", "Fetching data from 6 MCP servers in parallel...")
+
+        try:
+            # Wait for completion with partial metrics streaming
+            task = await wait_for_completion(
+                task_id,
+                progress_callback=progress_callback,
+                add_log=add_log,
+                emitted_metrics=emitted_metrics
+            )
+            break
+        except ResearchGatewayError as e:
+            if "Task not found" in str(e) and attempt == 0:
+                logger.warning(f"Task {task_id} lost (service restarted?); resubmitting once")
+                if add_log:
+                    add_log("researcher",
+                            "Research Service restarted mid-task (likely a deploy) - resubmitting...")
+                continue
+            raise
 
     # Extract data from artifacts
     artifacts = task.get("artifacts", [])
