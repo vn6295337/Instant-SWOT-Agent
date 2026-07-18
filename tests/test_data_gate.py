@@ -78,3 +78,23 @@ def test_reference_table_renders_missing_section():
     assert "MISSING - REQUIRED DATA NOT AVAILABLE" in table
     assert "DATA NOT PROVIDED" in table
     assert "valuation: pe_trailing" in table
+
+
+def test_margin_component_inconsistency_quarantined():
+    data = _healthy()
+    # annual revenue with quarterly net income: margin disagrees with components
+    data["fundamentals"]["net_income"] = 3.1e9
+    data["fundamentals"]["revenue"] = 32.8e9
+    data["fundamentals"]["net_margin"] = 40.0  # true annual margin, mismatched pair
+    audit = audit_extracted_metrics(data)
+    assert ("fundamentals", "net_margin", 40.0) in audit["suspect"]
+    assert any("period mixing" in g for g in audit["gaps"])
+
+
+def test_consistent_margin_not_flagged():
+    data = _healthy()
+    data["fundamentals"]["net_income"] = 2.237e9
+    data["fundamentals"]["revenue"] = 89.463e9
+    data["fundamentals"]["net_margin"] = 2.5
+    audit = audit_extracted_metrics(data)
+    assert audit["suspect"] == []

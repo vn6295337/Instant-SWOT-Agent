@@ -94,6 +94,22 @@ def audit_extracted_metrics(extracted: dict) -> dict:
             if not (lo <= value <= hi):
                 suspect.append((category, key, value))
 
+    # Cross-consistency: net_margin must agree with its components. A
+    # violation means mixed reporting periods upstream (annual revenue paired
+    # with a quarterly net income); quarantine all three so a wrong margin
+    # can never be cited as fact.
+    fundamentals = extracted.get("fundamentals") or {}
+    revenue = _numeric_value(fundamentals.get("revenue"))
+    net_income = _numeric_value(fundamentals.get("net_income"))
+    net_margin = _numeric_value(fundamentals.get("net_margin"))
+    if revenue and net_income is not None and net_margin is not None and revenue > 0:
+        derived = net_income / revenue * 100
+        if abs(derived - net_margin) > max(1.0, abs(net_margin) * 0.2):
+            for key, value in (("net_income", net_income), ("net_margin", net_margin)):
+                if ("fundamentals", key, value) not in suspect:
+                    suspect.append(("fundamentals", key, value))
+            gaps.append("fundamentals: net_margin (inconsistent with components - period mixing suspected)")
+
     return {"gaps": gaps, "suspect": suspect}
 
 

@@ -323,7 +323,8 @@ def critic_node(state, workflow_id=None, progress_store=None):
     iteration = revision_count + 1  # 1-indexed for display
 
     # Log evaluation start
-    _add_activity_log(workflow_id, progress_store, "critic", f"Evaluating SWOT quality (iteration {iteration}/3)...")
+    iteration_label = f"iteration {iteration}/3" if iteration <= 3 else "final evaluation"
+    _add_activity_log(workflow_id, progress_store, "critic", f"Evaluating SWOT quality ({iteration_label})...")
 
     # Get source data for grounding verification
     source_data = state.get("raw_data", "")
