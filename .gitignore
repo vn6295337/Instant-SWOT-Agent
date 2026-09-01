@@ -200,3 +200,7 @@ process_flow.*
 
 # Built frontend (Docker builds from source)
 static/
+
+# Sample outputs — tracked deliberately (see 2026-09-01)
+!AgentAsk.pdf
+!SWOT_Boeing.pdf
